@@ -1,0 +1,60 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Nucleotide Sequence Analyzer</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+<div class="container">
+    <div class="card">
+        <h1>Robin</h1>
+
+        <div class="instructions">
+            <p class="symbols">Valid symbols: A, C, G, T (basic nucleotides), R (A/G), Y (C/T), K (G/T), M (A/C), S (C/G), W (A/T), B (C/G/T), D (A/G/T), H (A/C/T), V (A/C/G), N (any)</p>
+        </div>
+
+        {{if .Error}}
+        <div class="error">
+            <i class="fas fa-exclamation-circle"></i>
+            {{.Error}}
+        </div>
+        {{end}}
+
+        <form action="/process" method="post">
+            <div class="input-group">
+                <label for="sequence">Enter Nucleotide Sequence</label>
+                <div class="input-wrapper">
+                    <input type="text" id="sequence" name="sequence" value="{{.Input}}"
+                           placeholder="e.g., AGCTRYMKSWBDHVN" required>
+                    <button type="submit">
+                        <i class="fas fa-dna"></i>
+                        Analyze
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        {{if .Result}}
+        <div class="results">
+            <div class="result-group">
+                <div class="result-header">
+                    <i class="fas fa-microscope"></i>
+                    <label>Input Interpretation</label>
+                </div>
+                <p class="result-content">{{.Result}}</p>
+            </div>
+            <div class="result-group">
+                <div class="result-header">
+                    <i class="fas fa-sync-alt"></i>
+                    <label>Complement Sequence</label>
+                </div>
+                <p class="result-content">{{.Complement}}</p>
+            </div>
+        </div>
+        {{end}}
+    </div>
+</div>
+</body>
+</html>
