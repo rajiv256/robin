@@ -6,7 +6,6 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"robin/nucleotide"
 	"strings"
 )
 
@@ -56,7 +55,7 @@ func handleProcess(w http.ResponseWriter, r *http.Request) {
 	var complement strings.Builder
 
 	for _, char := range input {
-		nuc := nucleotide.NewNucleotide(char)
+		nuc := NewNucleotide(char)
 		comp := nuc.Complement()
 
 		result.WriteString(nuc.String() + " ")
