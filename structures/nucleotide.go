@@ -1,4 +1,4 @@
-package nucleotide
+package structures
 
 type BaseType uint8
 
