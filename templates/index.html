@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>NUPACK Design</title>
+    
+        <link rel="stylesheet" type="text/css" href="/static/css/styles.css">
+    </head>
+    
+<body>
+    <div class="menu-bar">
+        <a href="#">Analysis</a>
+        <a class="active" href="#">Design</a>
+        <a href="#">Utilities</a>
+    </div>
+
+    <div class="container">
+        <h2>Sequence Design</h2>
+        <form id="design-form">
+            <div class="form-group">
+                <label>Material:</label>
+                <input type="radio" name="material" value="RNA" checked> RNA
+                <input type="radio" name="material" value="DNA"> DNA
+            </div>
+
+            <div class="form-group">
+                <label>Temperature (°C):</label>
+                <input type="number" id="temperature" value="37">
+                <label>Trials:</label>
+                <input type="number" id="trials" value="1">
+            </div>
+
+            <div class="accordion">
+                <div class="title">Model Options</div>
+                <div class="content">
+                    <label>Parameters:</label>
+                    <select id="parameters">
+                        <option value="dna06">dna06</option>
+                        <option value="dna04">dna04</option>
+                    </select>
+                    <label>Ensemble:</label>
+                    <select id="ensemble">
+                        <option value="all">All stacking</option>
+                        <option value="coaxial">Coaxial stacking</option>
+                        <option value="dangle">Dangle stacking</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="accordion">
+                <div class="title">Algorithm Settings</div>
+                <div class="content" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+                    <label>Stop Condition:</label>
+                    <input type="number" id="stop-condition" value="0.05">
+                    <label>Max Design Time (h):</label>
+                    <input type="number" id="max-time" value="2">
+                    <label>Random Seed:</label>
+                    <input type="number" id="random-seed" value="0">
+                    <label>Wobble Mutations:</label>
+                    <input type="radio" name="wobble" value="allow"> Allow
+                    <input type="radio" name="wobble" value="prohibit" checked> Prohibit
+                </div>
+            </div>
+
+            <div class="accordion">
+                <div class="title">Target Tubes</div>
+                <div class="content">
+                    <label>Tube Name:</label>
+                    <input type="text" id="tube-name" value="Tube 1">
+                    <button type="button" id="add-tube">+ Add Tube</button>
+                </div>
+            </div>
+
+            <div class="accordion">
+                <div class="title">Domains</div>
+                <div class="content">
+                    <table>
+                        <thead>
+                            <tr><th>Domain</th><th>Sequence</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody id="domains-list">
+                            <tr>
+                                <td><input type="text" value="Domain 1"></td>
+                                <td><input type="text"></td>
+                                <td><button type="button" class="delete">X</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <button type="button" id="add-domain">+ Add Domain</button>
+                </div>
+            </div>
+
+            <div class="accordion">
+                <div class="title">Target Complexes</div>
+                <div class="content">
+                    <table>
+                        <thead>
+                            <tr><th>Complex</th><th>Strand Order</th><th>Target Structure</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody id="complexes-list">
+                            <tr>
+                                <td><input type="text" value="Complex 1"></td>
+                                <td><input type="text"></td>
+                                <td><input type="text"></td>
+                                <td><button type="button" class="delete">X</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <button type="button" id="add-complex">+ Add Complex</button>
+                </div>
+            </div>
+
+            <button type="submit">Design</button>
+        </form>
+    </div>
+
+    <div id="output" class="hidden">
+        <h3>Design Results</h3>
+        <p id="result-text"></p>
+        <div id="plot"></div>
+    </div>
+</body>
+</html>
