@@ -4,121 +4,116 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>NUPACK Design</title>
-    
         <link rel="stylesheet" type="text/css" href="/static/css/styles.css">
+        <script src="https://cdn.tailwindcss.com"></script>
     </head>
-    
-<body>
-    <div class="menu-bar">
-        <a href="#">Analysis</a>
-        <a class="active" href="#">Design</a>
-        <a href="#">Utilities</a>
+<body class="bg-gray-100 text-gray-900">
+    <div class="bg-white shadow-md py-4 px-6 flex justify-between items-center">
+        <div class="text-xl font-bold text-indigo-600">NUPACK Design</div>
+        <nav class="space-x-4">
+            <a href="#" class="text-gray-600 hover:text-indigo-600">Analysis</a>
+            <a href="#" class="text-indigo-600 font-semibold">Design</a>
+            <a href="#" class="text-gray-600 hover:text-indigo-600">Utilities</a>
+        </nav>
     </div>
 
-    <div class="container">
-        <h2>Sequence Design</h2>
-        <form id="design-form">
-            <div class="form-group">
-                <label>Material:</label>
-                <input type="radio" name="material" value="RNA" checked> RNA
-                <input type="radio" name="material" value="DNA"> DNA
+    <div class="max-w-4xl mx-auto p-6 bg-white shadow-md rounded-lg mt-6">
+        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Sequence Design</h2>
+        <form id="design-form" class="space-y-4">
+            <div class="flex space-x-4">
+                <label class="font-medium">Material:</label>
+                <label><input type="radio" name="material" value="RNA" checked class="mr-1"> RNA</label>
+                <label><input type="radio" name="material" value="DNA" class="mr-1"> DNA</label>
             </div>
 
-            <div class="form-group">
-                <label>Temperature (°C):</label>
-                <input type="number" id="temperature" value="37">
-                <label>Trials:</label>
-                <input type="number" id="trials" value="1">
-            </div>
-
-            <div class="accordion">
-                <div class="title">Model Options</div>
-                <div class="content">
-                    <label>Parameters:</label>
-                    <select id="parameters">
-                        <option value="dna06">dna06</option>
-                        <option value="dna04">dna04</option>
-                    </select>
-                    <label>Ensemble:</label>
-                    <select id="ensemble">
-                        <option value="all">All stacking</option>
-                        <option value="coaxial">Coaxial stacking</option>
-                        <option value="dangle">Dangle stacking</option>
-                    </select>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="font-medium">Temperature (°C):</label>
+                    <input type="number" id="temperature" value="37" class="border p-2 w-full rounded">
+                </div>
+                <div>
+                    <label class="font-medium">Trials:</label>
+                    <input type="number" id="trials" value="1" class="border p-2 w-full rounded">
                 </div>
             </div>
 
-            <div class="accordion">
-                <div class="title">Algorithm Settings</div>
-                <div class="content" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
-                    <label>Stop Condition:</label>
-                    <input type="number" id="stop-condition" value="0.05">
-                    <label>Max Design Time (h):</label>
-                    <input type="number" id="max-time" value="2">
-                    <label>Random Seed:</label>
-                    <input type="number" id="random-seed" value="0">
-                    <label>Wobble Mutations:</label>
-                    <input type="radio" name="wobble" value="allow"> Allow
-                    <input type="radio" name="wobble" value="prohibit" checked> Prohibit
+            <div class="border-t pt-4">
+                <h3 class="font-semibold text-gray-700">Algorithm Settings</h3>
+                <div class="grid grid-cols-4 gap-4 mt-2">
+                    <div>
+                        <label class="font-medium">Stop Condition:</label>
+                        <input type="number" id="stop-condition" value="0.05" class="border p-2 w-full rounded">
+                    </div>
+                    <div>
+                        <label class="font-medium">Max Design Time (h):</label>
+                        <input type="number" id="max-time" value="2" class="border p-2 w-full rounded">
+                    </div>
+                    <div>
+                        <label class="font-medium">Random Seed:</label>
+                        <input type="number" id="random-seed" value="0" class="border p-2 w-full rounded">
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <label class="font-medium">Wobble Mutations:</label>
+                        <label><input type="radio" name="wobble" value="allow" class="mr-1"> Allow</label>
+                        <label><input type="radio" name="wobble" value="prohibit" checked class="mr-1"> Prohibit</label>
+                    </div>
                 </div>
             </div>
 
-            <div class="accordion">
-                <div class="title">Target Tubes</div>
-                <div class="content">
-                    <label>Tube Name:</label>
-                    <input type="text" id="tube-name" value="Tube 1">
-                    <button type="button" id="add-tube">+ Add Tube</button>
+            <div class="border-t pt-4">
+                <h3 class="font-semibold text-gray-700">Target Tubes</h3>
+                <div class="flex space-x-4">
+                    <input type="text" id="tube-name" value="Tube 1" class="border p-2 w-full rounded">
+                    <button type="button" id="add-tube" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">+ Add Tube</button>
                 </div>
             </div>
 
-            <div class="accordion">
-                <div class="title">Domains</div>
-                <div class="content">
-                    <table>
-                        <thead>
-                            <tr><th>Domain</th><th>Sequence</th><th>Actions</th></tr>
-                        </thead>
-                        <tbody id="domains-list">
-                            <tr>
-                                <td><input type="text" value="Domain 1"></td>
-                                <td><input type="text"></td>
-                                <td><button type="button" class="delete">X</button></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <button type="button" id="add-domain">+ Add Domain</button>
-                </div>
+            <div class="border-t pt-4">
+                <h3 class="font-semibold text-gray-700">Domains</h3>
+                <table class="w-full border rounded">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="p-2">Domain</th>
+                            <th class="p-2">Sequence</th>
+                            <th class="p-2">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="domains-list">
+                        <tr>
+                            <td><input type="text" value="Domain 1" class="border p-2 w-full rounded"></td>
+                            <td><input type="text" class="border p-2 w-full rounded"></td>
+                            <td><button type="button" class="bg-red-500 text-white px-3 py-1 rounded">X</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <button type="button" id="add-domain" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 mt-2">+ Add Domain</button>
             </div>
 
-            <div class="accordion">
-                <div class="title">Target Complexes</div>
-                <div class="content">
-                    <table>
-                        <thead>
-                            <tr><th>Complex</th><th>Strand Order</th><th>Target Structure</th><th>Actions</th></tr>
-                        </thead>
-                        <tbody id="complexes-list">
-                            <tr>
-                                <td><input type="text" value="Complex 1"></td>
-                                <td><input type="text"></td>
-                                <td><input type="text"></td>
-                                <td><button type="button" class="delete">X</button></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    <button type="button" id="add-complex">+ Add Complex</button>
-                </div>
+            <div class="border-t pt-4">
+                <h3 class="font-semibold text-gray-700">Target Complexes</h3>
+                <table class="w-full border rounded">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="p-2">Complex</th>
+                            <th class="p-2">Strand Order</th>
+                            <th class="p-2">Target Structure</th>
+                            <th class="p-2">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="complexes-list">
+                        <tr>
+                            <td><input type="text" value="Complex 1" class="border p-2 w-full rounded"></td>
+                            <td><input type="text" class="border p-2 w-full rounded"></td>
+                            <td><input type="text" class="border p-2 w-full rounded"></td>
+                            <td><button type="button" class="bg-red-500 text-white px-3 py-1 rounded">X</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <button type="button" id="add-complex" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 mt-2">+ Add Complex</button>
             </div>
 
-            <button type="submit">Design</button>
+            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 w-full">Design</button>
         </form>
-    </div>
-
-    <div id="output" class="hidden">
-        <h3>Design Results</h3>
-        <p id="result-text"></p>
-        <div id="plot"></div>
     </div>
 </body>
 </html>
