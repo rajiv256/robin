@@ -59,50 +59,62 @@
                     </div>
                 </div>
             </div>
-
-            <div class="border-t pt-4">
-                <h3 class="font-semibold text-gray-700">Target Tubes</h3>
-                <div class="flex space-x-4">
-                    <input type="text" id="tube-name" value="Tube 1" class="border p-2 w-full rounded">
-                    <button type="button" id="add-tube" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">+ Add Tube</button>
-                </div>
-            </div>
-
             <div class="border-t pt-4">
                 <h3 class="font-semibold text-gray-700">Domains</h3>
                 <table class="w-full border rounded">
                     <thead>
                         <tr class="bg-gray-100">
-                            <th class="p-2">Domain</th>
-                            <th class="p-2">Sequence</th>
+                            <th class="p-2">Domain Name</th>
+                            <th class="p-2">Domain Sequence</th>
                             <th class="p-2">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="domains-list">
                         <tr>
-                            <td><input type="text" value="Domain 1" class="border p-2 w-full rounded"></td>
-                            <td><input type="text" class="border p-2 w-full rounded"></td>
+                            <td><input type="text" placeholder="Enter Domain Name" class="border p-2 w-full rounded"></td>
+                            <td><input type="text" placeholder="Enter Sequence" class="border p-2 w-full rounded"></td>
                             <td><button type="button" class="bg-red-500 text-white px-3 py-1 rounded">X</button></td>
                         </tr>
                     </tbody>
                 </table>
                 <button type="button" id="add-domain" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 mt-2">+ Add Domain</button>
             </div>
-
+            
             <div class="border-t pt-4">
-                <h3 class="font-semibold text-gray-700">Target Complexes</h3>
+                <h3 class="font-semibold text-gray-700">Strands</h3>
                 <table class="w-full border rounded">
                     <thead>
                         <tr class="bg-gray-100">
-                            <th class="p-2">Complex</th>
+                            <th class="p-2">Strand</th>
+                            <th class="p-2">Sequence</th>
+                            <th class="p-2">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="strands-list">
+                        <tr>
+                            <td><input type="text" value="Strand 1" class="border p-2 w-full rounded"></td>
+                            <td><input type="text" class="border p-2 w-full rounded"></td>
+                            <td><button type="button" class="bg-red-500 text-white px-3 py-1 rounded">X</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <button type="button" id="add-strand" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 mt-2">+ Add Strand</button>
+            </div>
+
+            <div class="border-t pt-4">
+                <h3 class="font-semibold text-gray-700">Target Complex</h3>
+                <table class="w-full border rounded">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="p-2">Target Complex</th>
                             <th class="p-2">Strand Order</th>
                             <th class="p-2">Target Structure</th>
                             <th class="p-2">Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="complexes-list">
+                    <tbody id="complex-list">
                         <tr>
-                            <td><input type="text" value="Complex 1" class="border p-2 w-full rounded"></td>
+                            <td><input type="text" class="border p-2 w-full rounded"></td>
                             <td><input type="text" class="border p-2 w-full rounded"></td>
                             <td><input type="text" class="border p-2 w-full rounded"></td>
                             <td><button type="button" class="bg-red-500 text-white px-3 py-1 rounded">X</button></td>
@@ -110,6 +122,33 @@
                     </tbody>
                 </table>
                 <button type="button" id="add-complex" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 mt-2">+ Add Complex</button>
+            </div>
+
+            <div class="border-t pt-4">
+                <h3 class="font-semibold text-gray-700">Target Tubes</h3>
+                <input type="text" id="tube-name" value="Tube 1" class="border p-2 w-full rounded">
+                <button type="button" id="add-tube" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 mt-2">+ Add Tube</button>
+            </div>
+
+            <div class="border-t pt-4">
+                <h3 class="font-semibold text-gray-700">On-Target Complexes</h3>
+                <table class="w-full border rounded">
+                    <thead>
+                        <tr class="bg-gray-100">
+                            <th class="p-2">On-target Complex</th>
+                            <th class="p-2">Target Concentration</th>
+                            <th class="p-2">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><input type="text" class="border p-2 w-full rounded"></td>
+                            <td><input type="number" class="border p-2 w-full rounded"></td>
+                            <td><button type="button" class="bg-red-500 text-white px-3 py-1 rounded">X</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <button type="button" class="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 mt-2">+ Add On-target</button>
             </div>
 
             <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 w-full">Design</button>
