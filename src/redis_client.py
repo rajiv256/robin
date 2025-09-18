@@ -30,7 +30,6 @@ class RedisClient:
 
         for key in self.client.scan_iter():
             data = self.client.get(key)
-            print(data)
             if data:
                 entry = json.loads(data)
                 if attribute in entry:
