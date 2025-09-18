@@ -1,0 +1,4 @@
+redis~=6.4.0
+PyYAML~=6.0.2
+primer3-py
+tqdm
