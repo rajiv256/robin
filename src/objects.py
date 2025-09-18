@@ -32,7 +32,7 @@ class Domain:
         return f"""{self.name} ({len(self.seq)})"""
 
     def is_palindrome(self):
-        return utils.is_palindrome(self.seq)
+        return dna_utils.is_palindrome(self.seq)
 
     def gc_content(self):
         return self.base_percent('G') + self.base_percent('C')
