@@ -1,33 +1,63 @@
-# robin
-A package to create orthogonal strand sequences of DNA/RNA for strand displacement. 
+# Oligonucleotide Designer
 
-## Getting Started
+Design orthogonal DNA strands with thermodynamic validation. Build multi-domain sequences and validate them for
+hairpins, dimerization, and melting temperatures.
 
-Install `python3.10`
+## Setup
 
-Create a virtual environment at the content root and activate it.  
+### Requirements
 
-> `python3 -m venv venv`
+- Python 3.10
+- Node.js and npm
 
-> `source venv/bin/activate`
+### Backend Setup
 
-Set environment variables, for now the `PYTHONPATH`. Make sure you are inside the root folder `**/robin/`.
-Verify if it is set correctly to `**/robin`. 
+```bash
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
 
-> `export PYTHONPATH=$(pwd)`
+# Install dependencies
+pip install -r requirements
 
-> echo $PYTHONPATH 
 
-Install the requirements.
-
-> `pip install -r requirements.txt`
-
-Try to run the source or any other util files with a main function `if __name__=="__main__"` in them. You must run them from the content root. 
-For example: 
-
-> `python src/objects.py`
-
-should return ... 
-```python
-d1 (3) d2 (4) ø-d1 (3)--d2 (4)--> ø-d2* (4)--d1* (3)-->
+# Create __init__.py files
+touch __init__.py core/__init__.py api/__init__.py
 ```
+
+### Frontend Setup
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+```
+
+## Running
+
+Start backend:
+
+```bash
+cd backend
+source venv/bin/activate
+python app.py
+```
+
+Start frontend (in another terminal):
+
+```bash
+cd frontend
+npm start
+```
+
+Open http://localhost:3000
+
+## Usage
+
+1. Add domains with name and length
+2. Click "Generate & Validate" to create sequences
+3. Save strands to your library
+4. Edit/duplicate saved strands as needed
+
+The system validates melting temperature, hairpin formation, and dimerization automatically.
