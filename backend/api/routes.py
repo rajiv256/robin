@@ -15,7 +15,8 @@ def generate_oligonucleotide():
         result = designer.design_strand(
             strand_name=data['strand_name'],
             domains=data['domains'],
-            global_params=data['global_params']
+            global_params=data['global_params'],
+            validation_settings=data.get('validation_settings', {})  # Use frontend validation settings
         )
 
         # Convert to JSON-serializable format

@@ -24,6 +24,54 @@ const OligoDesigner = () => {
     const [error, setError] = useState(null);
     const [activeTab, setActiveTab] = useState('design'); // 'design' or 'library'
 
+    // Global parameters - now used from frontend
+    const [globalParams, setGlobalParams] = useState({
+        reaction_temp: 37,
+        salt_conc: 50,
+        mg_conc: 2,
+        oligo_conc: 250
+    });
+
+    // Advanced validation settings
+    const [validationSettings, setValidationSettings] = useState({
+        melting_temp: {
+            enabled: true,
+            min_offset: 5,
+            max_offset: 25
+        },
+        hairpin: {
+            enabled: true,
+            max_dg: -3.0
+        },
+        self_dimer: {
+            enabled: true,
+            max_dg: -6.0
+        },
+        cross_dimer: {
+            enabled: true,
+            max_dg: -6.0
+        },
+        gc_content: {
+            enabled: true,
+            min_percent: 40,
+            max_percent: 60
+        },
+        primer_3_end: {
+            enabled: false,
+            max_dg: -3.0
+        },
+        repeats: {
+            enabled: false,
+            max_length: 4
+        },
+        secondary_structure: {
+            enabled: false,
+            max_dg: -2.0
+        }
+    });
+
+    const [showAdvanced, setShowAdvanced] = useState(false);
+
     // Add domain to current strand
     const addDomain = () => {
         if (currentDomain.name) {
@@ -126,12 +174,8 @@ const OligoDesigner = () => {
             const requestData = {
                 strand_name: currentStrand.name,
                 domains: currentStrand.domains,
-                global_params: {
-                    reaction_temp: 37,
-                    salt_conc: 50,
-                    mg_conc: 2,
-                    oligo_conc: 250
-                }
+                global_params: globalParams,
+                validation_settings: validationSettings  // Include validation settings
             };
 
             console.log('Sending request:', requestData);
@@ -206,7 +250,533 @@ const OligoDesigner = () => {
                         />
                     </div>
 
-                    {/* Current Domains */}
+                    {/* Basic Temperature Setting */}
+                    <div style={{
+                        background: 'linear-gradient(135deg, #f8f9fa, #e9ecef)',
+                        padding: '20px',
+                        borderRadius: '8px',
+                        marginBottom: '20px'
+                    }}>
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            marginBottom: '15px'
+                        }}>
+                            <h3 style={{margin: 0, color: '#333'}}>Reaction Conditions</h3>
+                            <button
+                                onClick={() => setShowAdvanced(!showAdvanced)}
+                                style={{
+                                    padding: '6px 12px',
+                                    backgroundColor: '#6c757d',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px'
+                                }}
+                            >
+                                {showAdvanced ? '🔼 Hide Advanced' : '🔽 Show Advanced'}
+                            </button>
+                        </div>
+
+                        {/* Basic Settings - Always Visible */}
+                        <div style={{marginBottom: showAdvanced ? '20px' : '0'}}>
+                            <div style={{display: 'flex', gap: '15px', alignItems: 'end'}}>
+                                <div>
+                                    <label style={{
+                                        display: 'block',
+                                        fontWeight: 'bold',
+                                        marginBottom: '5px',
+                                        fontSize: '14px'
+                                    }}>
+                                        Reaction Temperature (°C):
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={globalParams.reaction_temp}
+                                        onChange={(e) => setGlobalParams(prev => ({
+                                            ...prev,
+                                            reaction_temp: Number(e.target.value)
+                                        }))}
+                                        style={{
+                                            padding: '8px',
+                                            borderRadius: '4px',
+                                            border: '1px solid #ccc',
+                                            width: '120px'
+                                        }}
+                                    />
+                                </div>
+                                <div style={{
+                                    fontSize: '12px',
+                                    color: '#666',
+                                    fontStyle: 'italic',
+                                    paddingBottom: '8px'
+                                }}>
+                                    🌡️ Target
+                                    Tm: {globalParams.reaction_temp + validationSettings.melting_temp.min_offset}°C
+                                    - {globalParams.reaction_temp + validationSettings.melting_temp.max_offset}°C
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Advanced Settings - Collapsible */}
+                        {showAdvanced && (
+                            <>
+                                <div style={{borderTop: '1px solid #ddd', paddingTop: '15px', marginBottom: '15px'}}>
+                                    <h4 style={{margin: '0 0 10px 0', color: '#555'}}>Advanced Reaction Parameters</h4>
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                                        gap: '15px'
+                                    }}>
+                                        <div>
+                                            <label style={{
+                                                display: 'block',
+                                                fontWeight: 'bold',
+                                                marginBottom: '5px',
+                                                fontSize: '13px'
+                                            }}>
+                                                Salt (mM):
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={globalParams.salt_conc}
+                                                onChange={(e) => setGlobalParams(prev => ({
+                                                    ...prev,
+                                                    salt_conc: Number(e.target.value)
+                                                }))}
+                                                style={{
+                                                    padding: '6px',
+                                                    borderRadius: '4px',
+                                                    border: '1px solid #ccc',
+                                                    width: '100%',
+                                                    fontSize: '13px'
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{
+                                                display: 'block',
+                                                fontWeight: 'bold',
+                                                marginBottom: '5px',
+                                                fontSize: '13px'
+                                            }}>
+                                                Mg²⁺ (mM):
+                                            </label>
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={globalParams.mg_conc}
+                                                onChange={(e) => setGlobalParams(prev => ({
+                                                    ...prev,
+                                                    mg_conc: Number(e.target.value)
+                                                }))}
+                                                style={{
+                                                    padding: '6px',
+                                                    borderRadius: '4px',
+                                                    border: '1px solid #ccc',
+                                                    width: '100%',
+                                                    fontSize: '13px'
+                                                }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{
+                                                display: 'block',
+                                                fontWeight: 'bold',
+                                                marginBottom: '5px',
+                                                fontSize: '13px'
+                                            }}>
+                                                Oligo (nM):
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={globalParams.oligo_conc}
+                                                onChange={(e) => setGlobalParams(prev => ({
+                                                    ...prev,
+                                                    oligo_conc: Number(e.target.value)
+                                                }))}
+                                                style={{
+                                                    padding: '6px',
+                                                    borderRadius: '4px',
+                                                    border: '1px solid #ccc',
+                                                    width: '100%',
+                                                    fontSize: '13px'
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div style={{borderTop: '1px solid #ddd', paddingTop: '15px'}}>
+                                    <h4 style={{margin: '0 0 15px 0', color: '#555'}}>Validation Thresholds</h4>
+
+                                    {/* Melting Temperature Settings */}
+                                    <div style={{
+                                        marginBottom: '15px',
+                                        padding: '10px',
+                                        backgroundColor: '#fff',
+                                        borderRadius: '6px',
+                                        border: '1px solid #e0e0e0'
+                                    }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                            marginBottom: '8px'
+                                        }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={validationSettings.melting_temp.enabled}
+                                                onChange={(e) => setValidationSettings(prev => ({
+                                                    ...prev,
+                                                    melting_temp: {...prev.melting_temp, enabled: e.target.checked}
+                                                }))}
+                                            />
+                                            <label style={{fontWeight: 'bold', fontSize: '14px'}}>Melting Temperature
+                                                Range</label>
+                                        </div>
+                                        {validationSettings.melting_temp.enabled && (
+                                            <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                                                <span style={{fontSize: '12px'}}>Offset:</span>
+                                                <input
+                                                    type="number"
+                                                    placeholder="Min"
+                                                    value={validationSettings.melting_temp.min_offset}
+                                                    onChange={(e) => setValidationSettings(prev => ({
+                                                        ...prev,
+                                                        melting_temp: {
+                                                            ...prev.melting_temp,
+                                                            min_offset: Number(e.target.value)
+                                                        }
+                                                    }))}
+                                                    style={{
+                                                        padding: '4px',
+                                                        borderRadius: '3px',
+                                                        border: '1px solid #ccc',
+                                                        width: '60px',
+                                                        fontSize: '12px'
+                                                    }}
+                                                />
+                                                <span style={{fontSize: '12px'}}>to</span>
+                                                <input
+                                                    type="number"
+                                                    placeholder="Max"
+                                                    value={validationSettings.melting_temp.max_offset}
+                                                    onChange={(e) => setValidationSettings(prev => ({
+                                                        ...prev,
+                                                        melting_temp: {
+                                                            ...prev.melting_temp,
+                                                            max_offset: Number(e.target.value)
+                                                        }
+                                                    }))}
+                                                    style={{
+                                                        padding: '4px',
+                                                        borderRadius: '3px',
+                                                        border: '1px solid #ccc',
+                                                        width: '60px',
+                                                        fontSize: '12px'
+                                                    }}
+                                                />
+                                                <span style={{fontSize: '12px'}}>°C above reaction temp</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Hairpin Settings */}
+                                    <div style={{
+                                        marginBottom: '15px',
+                                        padding: '10px',
+                                        backgroundColor: '#fff',
+                                        borderRadius: '6px',
+                                        border: '1px solid #e0e0e0'
+                                    }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                            marginBottom: '8px'
+                                        }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={validationSettings.hairpin.enabled}
+                                                onChange={(e) => setValidationSettings(prev => ({
+                                                    ...prev,
+                                                    hairpin: {...prev.hairpin, enabled: e.target.checked}
+                                                }))}
+                                            />
+                                            <label style={{fontWeight: 'bold', fontSize: '14px'}}>Hairpin
+                                                Formation</label>
+                                        </div>
+                                        {validationSettings.hairpin.enabled && (
+                                            <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                                                <span style={{fontSize: '12px'}}>Max ΔG:</span>
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    value={validationSettings.hairpin.max_dg}
+                                                    onChange={(e) => setValidationSettings(prev => ({
+                                                        ...prev,
+                                                        hairpin: {...prev.hairpin, max_dg: Number(e.target.value)}
+                                                    }))}
+                                                    style={{
+                                                        padding: '4px',
+                                                        borderRadius: '3px',
+                                                        border: '1px solid #ccc',
+                                                        width: '80px',
+                                                        fontSize: '12px'
+                                                    }}
+                                                />
+                                                <span style={{fontSize: '12px'}}>kcal/mol</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Self Dimerization Settings */}
+                                    <div style={{
+                                        marginBottom: '15px',
+                                        padding: '10px',
+                                        backgroundColor: '#fff',
+                                        borderRadius: '6px',
+                                        border: '1px solid #e0e0e0'
+                                    }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                            marginBottom: '8px'
+                                        }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={validationSettings.self_dimer.enabled}
+                                                onChange={(e) => setValidationSettings(prev => ({
+                                                    ...prev,
+                                                    self_dimer: {...prev.self_dimer, enabled: e.target.checked}
+                                                }))}
+                                            />
+                                            <label style={{fontWeight: 'bold', fontSize: '14px'}}>Self
+                                                Dimerization</label>
+                                        </div>
+                                        {validationSettings.self_dimer.enabled && (
+                                            <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                                                <span style={{fontSize: '12px'}}>Max ΔG:</span>
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    value={validationSettings.self_dimer.max_dg}
+                                                    onChange={(e) => setValidationSettings(prev => ({
+                                                        ...prev,
+                                                        self_dimer: {...prev.self_dimer, max_dg: Number(e.target.value)}
+                                                    }))}
+                                                    style={{
+                                                        padding: '4px',
+                                                        borderRadius: '3px',
+                                                        border: '1px solid #ccc',
+                                                        width: '80px',
+                                                        fontSize: '12px'
+                                                    }}
+                                                />
+                                                <span style={{fontSize: '12px'}}>kcal/mol</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Cross Dimerization Settings */}
+                                    <div style={{
+                                        marginBottom: '15px',
+                                        padding: '10px',
+                                        backgroundColor: '#fff',
+                                        borderRadius: '6px',
+                                        border: '1px solid #e0e0e0'
+                                    }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                            marginBottom: '8px'
+                                        }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={validationSettings.cross_dimer.enabled}
+                                                onChange={(e) => setValidationSettings(prev => ({
+                                                    ...prev,
+                                                    cross_dimer: {...prev.cross_dimer, enabled: e.target.checked}
+                                                }))}
+                                            />
+                                            <label style={{fontWeight: 'bold', fontSize: '14px'}}>Cross
+                                                Dimerization</label>
+                                        </div>
+                                        {validationSettings.cross_dimer.enabled && (
+                                            <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                                                <span style={{fontSize: '12px'}}>Max ΔG:</span>
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    value={validationSettings.cross_dimer.max_dg}
+                                                    onChange={(e) => setValidationSettings(prev => ({
+                                                        ...prev,
+                                                        cross_dimer: {
+                                                            ...prev.cross_dimer,
+                                                            max_dg: Number(e.target.value)
+                                                        }
+                                                    }))}
+                                                    style={{
+                                                        padding: '4px',
+                                                        borderRadius: '3px',
+                                                        border: '1px solid #ccc',
+                                                        width: '80px',
+                                                        fontSize: '12px'
+                                                    }}
+                                                />
+                                                <span style={{fontSize: '12px'}}>kcal/mol</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* GC Content Settings */}
+                                    <div style={{
+                                        marginBottom: '15px',
+                                        padding: '10px',
+                                        backgroundColor: '#fff',
+                                        borderRadius: '6px',
+                                        border: '1px solid #e0e0e0'
+                                    }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                            marginBottom: '8px'
+                                        }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={validationSettings.gc_content.enabled}
+                                                onChange={(e) => setValidationSettings(prev => ({
+                                                    ...prev,
+                                                    gc_content: {...prev.gc_content, enabled: e.target.checked}
+                                                }))}
+                                            />
+                                            <label style={{fontWeight: 'bold', fontSize: '14px'}}>GC Content
+                                                Range</label>
+                                        </div>
+                                        {validationSettings.gc_content.enabled && (
+                                            <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                                                <input
+                                                    type="number"
+                                                    placeholder="Min"
+                                                    value={validationSettings.gc_content.min_percent}
+                                                    onChange={(e) => setValidationSettings(prev => ({
+                                                        ...prev,
+                                                        gc_content: {
+                                                            ...prev.gc_content,
+                                                            min_percent: Number(e.target.value)
+                                                        }
+                                                    }))}
+                                                    style={{
+                                                        padding: '4px',
+                                                        borderRadius: '3px',
+                                                        border: '1px solid #ccc',
+                                                        width: '60px',
+                                                        fontSize: '12px'
+                                                    }}
+                                                />
+                                                <span style={{fontSize: '12px'}}>to</span>
+                                                <input
+                                                    type="number"
+                                                    placeholder="Max"
+                                                    value={validationSettings.gc_content.max_percent}
+                                                    onChange={(e) => setValidationSettings(prev => ({
+                                                        ...prev,
+                                                        gc_content: {
+                                                            ...prev.gc_content,
+                                                            max_percent: Number(e.target.value)
+                                                        }
+                                                    }))}
+                                                    style={{
+                                                        padding: '4px',
+                                                        borderRadius: '3px',
+                                                        border: '1px solid #ccc',
+                                                        width: '60px',
+                                                        fontSize: '12px'
+                                                    }}
+                                                />
+                                                <span style={{fontSize: '12px'}}>%</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Future Settings - Disabled for now but ready to enable */}
+                                    <div style={{opacity: 0.6}}>
+                                        <div style={{
+                                            marginBottom: '10px',
+                                            padding: '10px',
+                                            backgroundColor: '#f8f9fa',
+                                            borderRadius: '6px',
+                                            border: '1px solid #e0e0e0'
+                                        }}>
+                                            <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={validationSettings.primer_3_end.enabled}
+                                                    onChange={(e) => setValidationSettings(prev => ({
+                                                        ...prev,
+                                                        primer_3_end: {...prev.primer_3_end, enabled: e.target.checked}
+                                                    }))}
+                                                />
+                                                <label style={{fontWeight: 'bold', fontSize: '14px'}}>3′ End Stability
+                                                    (Coming Soon)</label>
+                                            </div>
+                                        </div>
+
+                                        <div style={{
+                                            marginBottom: '10px',
+                                            padding: '10px',
+                                            backgroundColor: '#f8f9fa',
+                                            borderRadius: '6px',
+                                            border: '1px solid #e0e0e0'
+                                        }}>
+                                            <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={validationSettings.repeats.enabled}
+                                                    onChange={(e) => setValidationSettings(prev => ({
+                                                        ...prev,
+                                                        repeats: {...prev.repeats, enabled: e.target.checked}
+                                                    }))}
+                                                />
+                                                <label style={{fontWeight: 'bold', fontSize: '14px'}}>Repeat Sequences
+                                                    (Coming Soon)</label>
+                                            </div>
+                                        </div>
+
+                                        <div style={{
+                                            marginBottom: '10px',
+                                            padding: '10px',
+                                            backgroundColor: '#f8f9fa',
+                                            borderRadius: '6px',
+                                            border: '1px solid #e0e0e0'
+                                        }}>
+                                            <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={validationSettings.secondary_structure.enabled}
+                                                    onChange={(e) => setValidationSettings(prev => ({
+                                                        ...prev,
+                                                        secondary_structure: {
+                                                            ...prev.secondary_structure,
+                                                            enabled: e.target.checked
+                                                        }
+                                                    }))}
+                                                />
+                                                <label style={{fontWeight: 'bold', fontSize: '14px'}}>Advanced Secondary
+                                                    Structure (Coming Soon)</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
                     {currentStrand.domains.length > 0 && (
                         <div style={{
                             background: '#f8f9fa',

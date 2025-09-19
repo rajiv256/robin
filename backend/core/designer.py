@@ -90,24 +90,28 @@ class OligonucleotideDesigner:
         """Validate the complete strand"""
         checks = {}
 
-        # Melting temperature
+        # Melting temperature (uses reaction_temp from frontend)
         checks['melting_temperature'] = self.validator.validate_melting_temperature(
             sequence, params
         )
 
-        # Hairpin formation
-        checks['hairpin_formation'] = self.validator.validate_hairpin_formation(sequence)
-
-        # Self-dimerization
-        checks['self_dimerization'] = self.validator.validate_self_dimerization(sequence)
-
-        # Cross-dimerization
-        other_sequences = [seq for seq in all_sequences if seq != sequence]
-        checks['cross_dimerization'] = self.validator.validate_cross_dimerization(
-            sequence, other_sequences
+        # Hairpin formation (uses reaction_temp from frontend)
+        checks['hairpin_formation'] = self.validator.validate_hairpin_formation(
+            sequence, params
         )
 
-        # GC content
+        # Self-dimerization (uses reaction_temp from frontend)
+        checks['self_dimerization'] = self.validator.validate_self_dimerization(
+            sequence, params
+        )
+
+        # Cross-dimerization (uses reaction_temp from frontend)
+        other_sequences = [seq for seq in all_sequences if seq != sequence]
+        checks['cross_dimerization'] = self.validator.validate_cross_dimerization(
+            sequence, other_sequences, params
+        )
+
+        # GC content (temperature independent)
         checks['gc_content'] = self.validator.validate_gc_content(sequence)
 
         # Overall pass/fail
@@ -122,5 +126,5 @@ class OligonucleotideDesigner:
         """Validate individual domain"""
         return {
             'gc_content': self.validator.validate_gc_content(sequence),
-            'hairpin': self.validator.validate_hairpin_formation(sequence)
+            'hairpin': self.validator.validate_hairpin_formation(sequence, params)
         }

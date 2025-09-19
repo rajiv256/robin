@@ -51,7 +51,7 @@ class ThermodynamicCalculator:
             return max(0, tm)
         return 0.0
 
-    def calculate_hairpin_dg(self, sequence: str) -> float:
+    def calculate_hairpin_dg(self, sequence: str, temp: float = 37.0) -> float:
         """Simplified hairpin formation energy calculation"""
         min_stem = 3
         min_loop = 3
@@ -67,13 +67,17 @@ class ThermodynamicCalculator:
                             matches += 1
 
                     if matches >= min_stem:
-                        dg = -1.5 * matches + 4.0  # Simplified calculation
+                        # Temperature-dependent dG calculation
+                        dg_37 = -1.5 * matches + 4.0  # Base calculation at 37°C
+                        # Simple temperature correction (more negative at lower temps)
+                        temp_correction = (temp - 37.0) * 0.02
+                        dg = dg_37 + temp_correction
                         if dg < best_dg:
                             best_dg = dg
 
         return best_dg
 
-    def calculate_dimer_dg(self, seq1: str, seq2: str) -> float:
+    def calculate_dimer_dg(self, seq1: str, seq2: str, temp: float = 37.0) -> float:
         """Simplified dimerization energy calculation"""
         best_dg = 0.0
 
@@ -89,7 +93,11 @@ class ThermodynamicCalculator:
                         matches += 1
 
             if overlap >= 3 and matches >= 3:
-                dg = -1.2 * matches + 2.0
+                # Temperature-dependent dG calculation
+                dg_37 = -1.2 * matches + 2.0  # Base calculation at 37°C
+                # Simple temperature correction
+                temp_correction = (temp - 37.0) * 0.015
+                dg = dg_37 + temp_correction
                 if dg < best_dg:
                     best_dg = dg
 
