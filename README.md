@@ -13,16 +13,13 @@ hairpins, dimerization, and melting temperatures.
 ### Backend Setup
 
 ```bash
+cd robin/
 # Create virtual environment
 python3 -m venv venv
 source venv/bin/activate
 
 # Install dependencies
-pip install -r requirements
-
-
-# Create __init__.py files
-touch __init__.py core/__init__.py api/__init__.py
+pip install -r requirements.txt
 ```
 
 ### Frontend Setup
