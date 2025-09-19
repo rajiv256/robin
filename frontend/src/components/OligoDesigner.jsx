@@ -1,56 +1,33 @@
 import React, {useState} from 'react';
 import './OligoDesigner.css';
 
-// Mock API function for demonstration
+
+// Real API function that connects to Redis database
 const generateStrand = async (requestData) => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+        const response = await fetch('http://localhost:5000/api/generate-oligonucleotide', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData)
+        });
 
-    // Generate more realistic mock results
-    const hairpinPass = Math.random() > 0.3;
-    const selfDimerPass = Math.random() > 0.2;
-    const gcContentPass = Math.random() > 0.1;
-
-    const validationResults = [
-        {name: "Melting Temperature", pass: true, message: "Within target range (42-62°C)"},
-        {
-            name: "Hairpin Formation",
-            pass: hairpinPass,
-            message: hairpinPass ? "No significant hairpins detected" : "Potential hairpin formation detected (ΔG = -4.2 kcal/mol)"
-        },
-        {
-            name: "Self Dimerization",
-            pass: selfDimerPass,
-            message: selfDimerPass ? "Below threshold (ΔG = -2.1 kcal/mol)" : "Self-dimerization risk (ΔG = -7.3 kcal/mol)"
-        },
-        {
-            name: "GC Content",
-            pass: gcContentPass,
-            message: gcContentPass ? "GC content within range (48%)" : "GC content outside range (65%)"
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
-    ];
 
-    const overallPass = validationResults.every(r => r.pass);
+        const result = await response.json();
 
-    // Mock response
-    return {
-        success: true,
-        strand: {
-            name: requestData.strand_name,
-            sequence: "ATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG",
-            total_length: requestData.domains.reduce((sum, d) => sum + d.length, 0)
-        },
-        validation: {
-            overall_pass: overallPass,
-            results: validationResults
-        },
-        generation_time: Math.random() * 2 + 1,
-        domains: requestData.domains.map(d => ({
-            ...d,
-            sequence: "ATCGATCG".repeat(Math.ceil(d.length / 8)).substring(0, d.length),
-            valid: Math.random() > 0.2
-        }))
-    };
+        if (!result.success) {
+            throw new Error(result.error || 'Generation failed');
+        }
+
+        return result;
+    } catch (error) {
+        console.error('API Error:', error);
+        throw error;
+    }
 };
 
 const OligoDesigner = () => {
@@ -687,16 +664,13 @@ const OligoDesigner = () => {
                                                     <span className="domain-result-name">{domain.name}</span>
                                                     <div className="domain-result-info">
                                                         <span className="domain-result-length">{domain.length}bp</span>
-                                                        <span
-                                                            className={`domain-status-badge ${domain.valid ? 'domain-status-valid' : 'domain-status-invalid'}`}>
-                                                            {domain.valid ? 'Valid' : 'Invalid'}
-                                                        </span>
                                                     </div>
                                                 </div>
                                                 <div className="domain-sequence">{domain.sequence}</div>
                                             </div>
                                         ))}
                                     </div>
+
                                 </div>
                             )}
 
@@ -769,6 +743,15 @@ const OligoDesigner = () => {
                                                 </React.Fragment>
                                             ))}
                                         </div>
+
+                                        {strand.result && strand.result.strand && (
+                                            <div className="library-sequence">
+                                                <strong>Sequence (5′ → 3′):</strong>
+                                                <div className="sequence-box">
+                                                    {strand.result.strand.sequence}
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {strand.result && (
                                             <div className="library-result">

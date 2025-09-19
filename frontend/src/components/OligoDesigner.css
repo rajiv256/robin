@@ -656,3 +656,15 @@
     color: #155724 !important;
     border: 1px solid #c3e6cb !important;
 }
+
+.library-sequence {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #dee2e6;
+}
+
+.library-sequence strong {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
