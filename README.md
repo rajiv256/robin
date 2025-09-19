@@ -346,3 +346,28 @@ Default validation settings:
 - **Deployment**: Docker-ready with environment configuration
 
 The system validates melting temperature, hairpin formation, and dimerization automatically.
+
+## Adding Oligos from a file
+ 
+Install dependencies
+
+`pip install redis numpy primer3-py`
+
+Basic usage
+
+`python oligo_redis_loader.py --file data/oligos.txt --stats`
+
+With custom reaction conditions
+
+`python oligo_redis_loader.py --file data/oligos.txt \
+--mv-conc 100.0 --dv-conc 2.0 --dna-conc 500.0 --temp 42.0 --stats`
+
+### Visualization Dashboard
+
+```bash
+pip install flask
+cd robin/
+python src/oligo_dashboard.py
+
+# Open http://localhost:5010 in browser
+```
