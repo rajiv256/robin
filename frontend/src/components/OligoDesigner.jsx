@@ -1,5 +1,57 @@
 import React, {useState} from 'react';
-import {generateStrand} from '../utils/api';
+import './OligoDesigner.css';
+
+// Mock API function for demonstration
+const generateStrand = async (requestData) => {
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
+    // Generate more realistic mock results
+    const hairpinPass = Math.random() > 0.3;
+    const selfDimerPass = Math.random() > 0.2;
+    const gcContentPass = Math.random() > 0.1;
+
+    const validationResults = [
+        {name: "Melting Temperature", pass: true, message: "Within target range (42-62°C)"},
+        {
+            name: "Hairpin Formation",
+            pass: hairpinPass,
+            message: hairpinPass ? "No significant hairpins detected" : "Potential hairpin formation detected (ΔG = -4.2 kcal/mol)"
+        },
+        {
+            name: "Self Dimerization",
+            pass: selfDimerPass,
+            message: selfDimerPass ? "Below threshold (ΔG = -2.1 kcal/mol)" : "Self-dimerization risk (ΔG = -7.3 kcal/mol)"
+        },
+        {
+            name: "GC Content",
+            pass: gcContentPass,
+            message: gcContentPass ? "GC content within range (48%)" : "GC content outside range (65%)"
+        }
+    ];
+
+    const overallPass = validationResults.every(r => r.pass);
+
+    // Mock response
+    return {
+        success: true,
+        strand: {
+            name: requestData.strand_name,
+            sequence: "ATCGATCGATCGATCGATCGATCGATCGATCGATCGATCGATCG",
+            total_length: requestData.domains.reduce((sum, d) => sum + d.length, 0)
+        },
+        validation: {
+            overall_pass: overallPass,
+            results: validationResults
+        },
+        generation_time: Math.random() * 2 + 1,
+        domains: requestData.domains.map(d => ({
+            ...d,
+            sequence: "ATCGATCG".repeat(Math.ceil(d.length / 8)).substring(0, d.length),
+            valid: Math.random() > 0.2
+        }))
+    };
+};
 
 const OligoDesigner = () => {
     // Strand library - stores all saved strands
@@ -22,9 +74,10 @@ const OligoDesigner = () => {
     // UI state
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState(null);
+    const [saveMessage, setSaveMessage] = useState(null);
     const [activeTab, setActiveTab] = useState('design'); // 'design' or 'library'
 
-    // Global parameters - now used from frontend
+    // Global parameters
     const [globalParams, setGlobalParams] = useState({
         reaction_temp: 37,
         salt_conc: 50,
@@ -100,7 +153,8 @@ const OligoDesigner = () => {
     // Save current strand to library
     const saveStrand = () => {
         if (currentStrand.domains.length === 0) {
-            alert('Please add at least one domain before saving');
+            setSaveMessage({type: 'error', text: 'Please add at least one domain before saving'});
+            setTimeout(() => setSaveMessage(null), 3000);
             return;
         }
 
@@ -115,10 +169,15 @@ const OligoDesigner = () => {
             setStrandLibrary(prev =>
                 prev.map(s => s.id === currentStrand.id ? strandToSave : s)
             );
+            setSaveMessage({type: 'success', text: 'Strand updated successfully!'});
         } else {
             // Add new strand
             setStrandLibrary(prev => [...prev, strandToSave]);
+            setSaveMessage({type: 'success', text: 'Strand saved to library!'});
         }
+
+        // Clear message after 3 seconds
+        setTimeout(() => setSaveMessage(null), 3000);
 
         // Reset current strand for new design
         const nextStrandNumber = strandLibrary.length + 2;
@@ -128,8 +187,6 @@ const OligoDesigner = () => {
             domains: [],
             result: null
         });
-
-        alert('Strand saved to library!');
     };
 
     // Load strand from library for editing
@@ -175,7 +232,7 @@ const OligoDesigner = () => {
                 strand_name: currentStrand.name,
                 domains: currentStrand.domains,
                 global_params: globalParams,
-                validation_settings: validationSettings  // Include validation settings
+                validation_settings: validationSettings
             };
 
             console.log('Sending request:', requestData);
@@ -192,31 +249,20 @@ const OligoDesigner = () => {
         setIsGenerating(false);
     };
 
-    const tabStyle = (isActive) => ({
-        padding: '8px 16px',
-        backgroundColor: isActive ? '#007bff' : '#f8f9fa',
-        color: isActive ? 'white' : '#333',
-        border: '1px solid #dee2e6',
-        borderBottom: 'none',
-        borderRadius: '4px 4px 0 0',
-        cursor: 'pointer',
-        marginRight: '2px'
-    });
-
     return (
-        <div style={{padding: '20px', maxWidth: '1000px', margin: '0 auto'}}>
+        <div className="oligo-designer">
             <h1>🧬 Multi-Strand Oligonucleotide Designer</h1>
 
             {/* Tabs */}
-            <div style={{marginBottom: '20px'}}>
+            <div className="tabs">
                 <button
-                    style={tabStyle(activeTab === 'design')}
+                    className={`tab-button ${activeTab === 'design' ? 'active' : 'inactive'}`}
                     onClick={() => setActiveTab('design')}
                 >
                     Design ({currentStrand.domains.length} domains)
                 </button>
                 <button
-                    style={tabStyle(activeTab === 'library')}
+                    className={`tab-button ${activeTab === 'library' ? 'active' : 'inactive'}`}
                     onClick={() => setActiveTab('library')}
                 >
                     Library ({strandLibrary.length} strands)
@@ -225,207 +271,128 @@ const OligoDesigner = () => {
 
             {/* Design Tab */}
             {activeTab === 'design' && (
-                <div style={{
-                    border: '1px solid #dee2e6',
-                    borderTop: 'none',
-                    padding: '20px',
-                    borderRadius: '0 0 8px 8px',
-                    backgroundColor: '#fff'
-                }}>
+                <div className="tab-content">
                     {/* Strand Name */}
-                    <div style={{marginBottom: '20px'}}>
-                        <label style={{display: 'block', fontWeight: 'bold', marginBottom: '5px'}}>
-                            Strand Name:
-                        </label>
+                    <div className="form-group">
+                        <label className="form-label">Strand Name:</label>
                         <input
                             type="text"
+                            className="form-input strand-name"
                             value={currentStrand.name}
                             onChange={(e) => setCurrentStrand(prev => ({...prev, name: e.target.value}))}
-                            style={{
-                                padding: '8px',
-                                borderRadius: '4px',
-                                border: '1px solid #ccc',
-                                width: '300px'
-                            }}
                         />
                     </div>
 
-                    {/* Basic Temperature Setting */}
-                    <div style={{
-                        background: 'linear-gradient(135deg, #f8f9fa, #e9ecef)',
-                        padding: '20px',
-                        borderRadius: '8px',
-                        marginBottom: '20px'
-                    }}>
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            marginBottom: '15px'
-                        }}>
-                            <h3 style={{margin: 0, color: '#333'}}>Reaction Conditions</h3>
+                    {/* Current Domains */}
+                    {currentStrand.domains.length > 0 && (
+                        <div className="domain-status">
+                            <h3>Current Strand (5′ → 3′)</h3>
+                            <div className="domain-list">
+                                {currentStrand.domains.map((domain, index) => (
+                                    <React.Fragment key={domain.id}>
+                                        <div className="domain-badge">
+                                            <div className="domain-name">{domain.name}</div>
+                                            <div className="domain-length">{domain.length}bp</div>
+                                            <button
+                                                onClick={() => removeDomain(domain.id)}
+                                                className="domain-remove"
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                        {index < currentStrand.domains.length - 1 &&
+                                            <span className="domain-arrow">→</span>
+                                        }
+                                    </React.Fragment>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Settings Panel */}
+                    <div className="settings-panel">
+                        <div className="settings-header">
+                            <h3>Reaction Conditions</h3>
                             <button
                                 onClick={() => setShowAdvanced(!showAdvanced)}
-                                style={{
-                                    padding: '6px 12px',
-                                    backgroundColor: '#6c757d',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                    fontSize: '12px'
-                                }}
+                                className="advanced-toggle"
                             >
                                 {showAdvanced ? '🔼 Hide Advanced' : '🔽 Show Advanced'}
                             </button>
                         </div>
 
-                        {/* Basic Settings - Always Visible */}
-                        <div style={{marginBottom: showAdvanced ? '20px' : '0'}}>
-                            <div style={{display: 'flex', gap: '15px', alignItems: 'end'}}>
-                                <div>
-                                    <label style={{
-                                        display: 'block',
-                                        fontWeight: 'bold',
-                                        marginBottom: '5px',
-                                        fontSize: '14px'
-                                    }}>
-                                        Reaction Temperature (°C):
-                                    </label>
-                                    <input
-                                        type="number"
-                                        value={globalParams.reaction_temp}
-                                        onChange={(e) => setGlobalParams(prev => ({
-                                            ...prev,
-                                            reaction_temp: Number(e.target.value)
-                                        }))}
-                                        style={{
-                                            padding: '8px',
-                                            borderRadius: '4px',
-                                            border: '1px solid #ccc',
-                                            width: '120px'
-                                        }}
-                                    />
-                                </div>
-                                <div style={{
-                                    fontSize: '12px',
-                                    color: '#666',
-                                    fontStyle: 'italic',
-                                    paddingBottom: '8px'
-                                }}>
-                                    🌡️ Target
-                                    Tm: {globalParams.reaction_temp + validationSettings.melting_temp.min_offset}°C
-                                    - {globalParams.reaction_temp + validationSettings.melting_temp.max_offset}°C
-                                </div>
+                        {/* Basic Settings */}
+                        <div className="basic-settings">
+                            <div>
+                                <label className="form-label">Reaction Temperature (°C):</label>
+                                <input
+                                    type="number"
+                                    className="form-input"
+                                    value={globalParams.reaction_temp}
+                                    onChange={(e) => setGlobalParams(prev => ({
+                                        ...prev,
+                                        reaction_temp: Number(e.target.value)
+                                    }))}
+                                />
+                            </div>
+                            <div className="temp-target">
+                                🌡️ Target Tm: {globalParams.reaction_temp + validationSettings.melting_temp.min_offset}°C
+                                - {globalParams.reaction_temp + validationSettings.melting_temp.max_offset}°C
                             </div>
                         </div>
 
-                        {/* Advanced Settings - Collapsible */}
+                        {/* Advanced Settings */}
                         {showAdvanced && (
-                            <>
-                                <div style={{borderTop: '1px solid #ddd', paddingTop: '15px', marginBottom: '15px'}}>
-                                    <h4 style={{margin: '0 0 10px 0', color: '#555'}}>Advanced Reaction Parameters</h4>
-                                    <div style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-                                        gap: '15px'
-                                    }}>
+                            <div className="advanced-settings">
+                                <div className="advanced-section">
+                                    <h4>Advanced Reaction Parameters</h4>
+                                    <div className="advanced-grid">
                                         <div>
-                                            <label style={{
-                                                display: 'block',
-                                                fontWeight: 'bold',
-                                                marginBottom: '5px',
-                                                fontSize: '13px'
-                                            }}>
-                                                Salt (mM):
-                                            </label>
+                                            <label className="form-label">Salt (mM):</label>
                                             <input
                                                 type="number"
+                                                className="advanced-input"
                                                 value={globalParams.salt_conc}
                                                 onChange={(e) => setGlobalParams(prev => ({
                                                     ...prev,
                                                     salt_conc: Number(e.target.value)
                                                 }))}
-                                                style={{
-                                                    padding: '6px',
-                                                    borderRadius: '4px',
-                                                    border: '1px solid #ccc',
-                                                    width: '100%',
-                                                    fontSize: '13px'
-                                                }}
                                             />
                                         </div>
                                         <div>
-                                            <label style={{
-                                                display: 'block',
-                                                fontWeight: 'bold',
-                                                marginBottom: '5px',
-                                                fontSize: '13px'
-                                            }}>
-                                                Mg²⁺ (mM):
-                                            </label>
+                                            <label className="form-label">Mg²⁺ (mM):</label>
                                             <input
                                                 type="number"
                                                 step="0.1"
+                                                className="advanced-input"
                                                 value={globalParams.mg_conc}
                                                 onChange={(e) => setGlobalParams(prev => ({
                                                     ...prev,
                                                     mg_conc: Number(e.target.value)
                                                 }))}
-                                                style={{
-                                                    padding: '6px',
-                                                    borderRadius: '4px',
-                                                    border: '1px solid #ccc',
-                                                    width: '100%',
-                                                    fontSize: '13px'
-                                                }}
                                             />
                                         </div>
                                         <div>
-                                            <label style={{
-                                                display: 'block',
-                                                fontWeight: 'bold',
-                                                marginBottom: '5px',
-                                                fontSize: '13px'
-                                            }}>
-                                                Oligo (nM):
-                                            </label>
+                                            <label className="form-label">Oligo (nM):</label>
                                             <input
                                                 type="number"
+                                                className="advanced-input"
                                                 value={globalParams.oligo_conc}
                                                 onChange={(e) => setGlobalParams(prev => ({
                                                     ...prev,
                                                     oligo_conc: Number(e.target.value)
                                                 }))}
-                                                style={{
-                                                    padding: '6px',
-                                                    borderRadius: '4px',
-                                                    border: '1px solid #ccc',
-                                                    width: '100%',
-                                                    fontSize: '13px'
-                                                }}
                                             />
                                         </div>
                                     </div>
                                 </div>
 
-                                <div style={{borderTop: '1px solid #ddd', paddingTop: '15px'}}>
-                                    <h4 style={{margin: '0 0 15px 0', color: '#555'}}>Validation Thresholds</h4>
+                                <div className="advanced-section">
+                                    <h4>Validation Thresholds</h4>
 
                                     {/* Melting Temperature Settings */}
-                                    <div style={{
-                                        marginBottom: '15px',
-                                        padding: '10px',
-                                        backgroundColor: '#fff',
-                                        borderRadius: '6px',
-                                        border: '1px solid #e0e0e0'
-                                    }}>
-                                        <div style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '10px',
-                                            marginBottom: '8px'
-                                        }}>
+                                    <div className="validation-group">
+                                        <div className="validation-header">
                                             <input
                                                 type="checkbox"
                                                 checked={validationSettings.melting_temp.enabled}
@@ -434,14 +401,14 @@ const OligoDesigner = () => {
                                                     melting_temp: {...prev.melting_temp, enabled: e.target.checked}
                                                 }))}
                                             />
-                                            <label style={{fontWeight: 'bold', fontSize: '14px'}}>Melting Temperature
-                                                Range</label>
+                                            <label>Melting Temperature Range</label>
                                         </div>
                                         {validationSettings.melting_temp.enabled && (
-                                            <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-                                                <span style={{fontSize: '12px'}}>Offset:</span>
+                                            <div className="validation-controls">
+                                                <span>Offset:</span>
                                                 <input
                                                     type="number"
+                                                    className="validation-input"
                                                     placeholder="Min"
                                                     value={validationSettings.melting_temp.min_offset}
                                                     onChange={(e) => setValidationSettings(prev => ({
@@ -451,17 +418,11 @@ const OligoDesigner = () => {
                                                             min_offset: Number(e.target.value)
                                                         }
                                                     }))}
-                                                    style={{
-                                                        padding: '4px',
-                                                        borderRadius: '3px',
-                                                        border: '1px solid #ccc',
-                                                        width: '60px',
-                                                        fontSize: '12px'
-                                                    }}
                                                 />
-                                                <span style={{fontSize: '12px'}}>to</span>
+                                                <span>to</span>
                                                 <input
                                                     type="number"
+                                                    className="validation-input"
                                                     placeholder="Max"
                                                     value={validationSettings.melting_temp.max_offset}
                                                     onChange={(e) => setValidationSettings(prev => ({
@@ -471,33 +432,15 @@ const OligoDesigner = () => {
                                                             max_offset: Number(e.target.value)
                                                         }
                                                     }))}
-                                                    style={{
-                                                        padding: '4px',
-                                                        borderRadius: '3px',
-                                                        border: '1px solid #ccc',
-                                                        width: '60px',
-                                                        fontSize: '12px'
-                                                    }}
                                                 />
-                                                <span style={{fontSize: '12px'}}>°C above reaction temp</span>
+                                                <span>°C above reaction temp</span>
                                             </div>
                                         )}
                                     </div>
 
                                     {/* Hairpin Settings */}
-                                    <div style={{
-                                        marginBottom: '15px',
-                                        padding: '10px',
-                                        backgroundColor: '#fff',
-                                        borderRadius: '6px',
-                                        border: '1px solid #e0e0e0'
-                                    }}>
-                                        <div style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '10px',
-                                            marginBottom: '8px'
-                                        }}>
+                                    <div className="validation-group">
+                                        <div className="validation-header">
                                             <input
                                                 type="checkbox"
                                                 checked={validationSettings.hairpin.enabled}
@@ -506,47 +449,29 @@ const OligoDesigner = () => {
                                                     hairpin: {...prev.hairpin, enabled: e.target.checked}
                                                 }))}
                                             />
-                                            <label style={{fontWeight: 'bold', fontSize: '14px'}}>Hairpin
-                                                Formation</label>
+                                            <label>Hairpin Formation</label>
                                         </div>
                                         {validationSettings.hairpin.enabled && (
-                                            <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-                                                <span style={{fontSize: '12px'}}>Max ΔG:</span>
+                                            <div className="validation-controls">
+                                                <span>Max ΔG:</span>
                                                 <input
                                                     type="number"
                                                     step="0.1"
+                                                    className="validation-input dg-input"
                                                     value={validationSettings.hairpin.max_dg}
                                                     onChange={(e) => setValidationSettings(prev => ({
                                                         ...prev,
                                                         hairpin: {...prev.hairpin, max_dg: Number(e.target.value)}
                                                     }))}
-                                                    style={{
-                                                        padding: '4px',
-                                                        borderRadius: '3px',
-                                                        border: '1px solid #ccc',
-                                                        width: '80px',
-                                                        fontSize: '12px'
-                                                    }}
                                                 />
-                                                <span style={{fontSize: '12px'}}>kcal/mol</span>
+                                                <span>kcal/mol</span>
                                             </div>
                                         )}
                                     </div>
 
                                     {/* Self Dimerization Settings */}
-                                    <div style={{
-                                        marginBottom: '15px',
-                                        padding: '10px',
-                                        backgroundColor: '#fff',
-                                        borderRadius: '6px',
-                                        border: '1px solid #e0e0e0'
-                                    }}>
-                                        <div style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '10px',
-                                            marginBottom: '8px'
-                                        }}>
+                                    <div className="validation-group">
+                                        <div className="validation-header">
                                             <input
                                                 type="checkbox"
                                                 checked={validationSettings.self_dimer.enabled}
@@ -555,47 +480,29 @@ const OligoDesigner = () => {
                                                     self_dimer: {...prev.self_dimer, enabled: e.target.checked}
                                                 }))}
                                             />
-                                            <label style={{fontWeight: 'bold', fontSize: '14px'}}>Self
-                                                Dimerization</label>
+                                            <label>Self Dimerization</label>
                                         </div>
                                         {validationSettings.self_dimer.enabled && (
-                                            <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-                                                <span style={{fontSize: '12px'}}>Max ΔG:</span>
+                                            <div className="validation-controls">
+                                                <span>Max ΔG:</span>
                                                 <input
                                                     type="number"
                                                     step="0.1"
+                                                    className="validation-input dg-input"
                                                     value={validationSettings.self_dimer.max_dg}
                                                     onChange={(e) => setValidationSettings(prev => ({
                                                         ...prev,
                                                         self_dimer: {...prev.self_dimer, max_dg: Number(e.target.value)}
                                                     }))}
-                                                    style={{
-                                                        padding: '4px',
-                                                        borderRadius: '3px',
-                                                        border: '1px solid #ccc',
-                                                        width: '80px',
-                                                        fontSize: '12px'
-                                                    }}
                                                 />
-                                                <span style={{fontSize: '12px'}}>kcal/mol</span>
+                                                <span>kcal/mol</span>
                                             </div>
                                         )}
                                     </div>
 
                                     {/* Cross Dimerization Settings */}
-                                    <div style={{
-                                        marginBottom: '15px',
-                                        padding: '10px',
-                                        backgroundColor: '#fff',
-                                        borderRadius: '6px',
-                                        border: '1px solid #e0e0e0'
-                                    }}>
-                                        <div style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '10px',
-                                            marginBottom: '8px'
-                                        }}>
+                                    <div className="validation-group">
+                                        <div className="validation-header">
                                             <input
                                                 type="checkbox"
                                                 checked={validationSettings.cross_dimer.enabled}
@@ -604,15 +511,15 @@ const OligoDesigner = () => {
                                                     cross_dimer: {...prev.cross_dimer, enabled: e.target.checked}
                                                 }))}
                                             />
-                                            <label style={{fontWeight: 'bold', fontSize: '14px'}}>Cross
-                                                Dimerization</label>
+                                            <label>Cross Dimerization</label>
                                         </div>
                                         {validationSettings.cross_dimer.enabled && (
-                                            <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-                                                <span style={{fontSize: '12px'}}>Max ΔG:</span>
+                                            <div className="validation-controls">
+                                                <span>Max ΔG:</span>
                                                 <input
                                                     type="number"
                                                     step="0.1"
+                                                    className="validation-input dg-input"
                                                     value={validationSettings.cross_dimer.max_dg}
                                                     onChange={(e) => setValidationSettings(prev => ({
                                                         ...prev,
@@ -621,33 +528,15 @@ const OligoDesigner = () => {
                                                             max_dg: Number(e.target.value)
                                                         }
                                                     }))}
-                                                    style={{
-                                                        padding: '4px',
-                                                        borderRadius: '3px',
-                                                        border: '1px solid #ccc',
-                                                        width: '80px',
-                                                        fontSize: '12px'
-                                                    }}
                                                 />
-                                                <span style={{fontSize: '12px'}}>kcal/mol</span>
+                                                <span>kcal/mol</span>
                                             </div>
                                         )}
                                     </div>
 
                                     {/* GC Content Settings */}
-                                    <div style={{
-                                        marginBottom: '15px',
-                                        padding: '10px',
-                                        backgroundColor: '#fff',
-                                        borderRadius: '6px',
-                                        border: '1px solid #e0e0e0'
-                                    }}>
-                                        <div style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '10px',
-                                            marginBottom: '8px'
-                                        }}>
+                                    <div className="validation-group">
+                                        <div className="validation-header">
                                             <input
                                                 type="checkbox"
                                                 checked={validationSettings.gc_content.enabled}
@@ -656,13 +545,13 @@ const OligoDesigner = () => {
                                                     gc_content: {...prev.gc_content, enabled: e.target.checked}
                                                 }))}
                                             />
-                                            <label style={{fontWeight: 'bold', fontSize: '14px'}}>GC Content
-                                                Range</label>
+                                            <label>GC Content Range</label>
                                         </div>
                                         {validationSettings.gc_content.enabled && (
-                                            <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                                            <div className="validation-controls">
                                                 <input
                                                     type="number"
+                                                    className="validation-input"
                                                     placeholder="Min"
                                                     value={validationSettings.gc_content.min_percent}
                                                     onChange={(e) => setValidationSettings(prev => ({
@@ -672,17 +561,11 @@ const OligoDesigner = () => {
                                                             min_percent: Number(e.target.value)
                                                         }
                                                     }))}
-                                                    style={{
-                                                        padding: '4px',
-                                                        borderRadius: '3px',
-                                                        border: '1px solid #ccc',
-                                                        width: '60px',
-                                                        fontSize: '12px'
-                                                    }}
                                                 />
-                                                <span style={{fontSize: '12px'}}>to</span>
+                                                <span>to</span>
                                                 <input
                                                     type="number"
+                                                    className="validation-input"
                                                     placeholder="Max"
                                                     value={validationSettings.gc_content.max_percent}
                                                     onChange={(e) => setValidationSettings(prev => ({
@@ -692,192 +575,46 @@ const OligoDesigner = () => {
                                                             max_percent: Number(e.target.value)
                                                         }
                                                     }))}
-                                                    style={{
-                                                        padding: '4px',
-                                                        borderRadius: '3px',
-                                                        border: '1px solid #ccc',
-                                                        width: '60px',
-                                                        fontSize: '12px'
-                                                    }}
                                                 />
-                                                <span style={{fontSize: '12px'}}>%</span>
+                                                <span>%</span>
                                             </div>
                                         )}
                                     </div>
-
-                                    {/* Future Settings - Disabled for now but ready to enable */}
-                                    <div style={{opacity: 0.6}}>
-                                        <div style={{
-                                            marginBottom: '10px',
-                                            padding: '10px',
-                                            backgroundColor: '#f8f9fa',
-                                            borderRadius: '6px',
-                                            border: '1px solid #e0e0e0'
-                                        }}>
-                                            <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={validationSettings.primer_3_end.enabled}
-                                                    onChange={(e) => setValidationSettings(prev => ({
-                                                        ...prev,
-                                                        primer_3_end: {...prev.primer_3_end, enabled: e.target.checked}
-                                                    }))}
-                                                />
-                                                <label style={{fontWeight: 'bold', fontSize: '14px'}}>3′ End Stability
-                                                    (Coming Soon)</label>
-                                            </div>
-                                        </div>
-
-                                        <div style={{
-                                            marginBottom: '10px',
-                                            padding: '10px',
-                                            backgroundColor: '#f8f9fa',
-                                            borderRadius: '6px',
-                                            border: '1px solid #e0e0e0'
-                                        }}>
-                                            <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={validationSettings.repeats.enabled}
-                                                    onChange={(e) => setValidationSettings(prev => ({
-                                                        ...prev,
-                                                        repeats: {...prev.repeats, enabled: e.target.checked}
-                                                    }))}
-                                                />
-                                                <label style={{fontWeight: 'bold', fontSize: '14px'}}>Repeat Sequences
-                                                    (Coming Soon)</label>
-                                            </div>
-                                        </div>
-
-                                        <div style={{
-                                            marginBottom: '10px',
-                                            padding: '10px',
-                                            backgroundColor: '#f8f9fa',
-                                            borderRadius: '6px',
-                                            border: '1px solid #e0e0e0'
-                                        }}>
-                                            <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={validationSettings.secondary_structure.enabled}
-                                                    onChange={(e) => setValidationSettings(prev => ({
-                                                        ...prev,
-                                                        secondary_structure: {
-                                                            ...prev.secondary_structure,
-                                                            enabled: e.target.checked
-                                                        }
-                                                    }))}
-                                                />
-                                                <label style={{fontWeight: 'bold', fontSize: '14px'}}>Advanced Secondary
-                                                    Structure (Coming Soon)</label>
-                                            </div>
-                                        </div>
-                                    </div>
                                 </div>
-                            </>
+                            </div>
                         )}
                     </div>
-                    {currentStrand.domains.length > 0 && (
-                        <div style={{
-                            background: '#f8f9fa',
-                            padding: '15px',
-                            borderRadius: '8px',
-                            marginBottom: '20px'
-                        }}>
-                            <h3 style={{margin: '0 0 10px 0'}}>Current Strand (5′ → 3′)</h3>
-                            <div style={{display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap'}}>
-                                {currentStrand.domains.map((domain, index) => (
-                                    <React.Fragment key={domain.id}>
-                                        <div style={{
-                                            background: 'linear-gradient(135deg, #007bff, #0056b3)',
-                                            color: 'white',
-                                            padding: '8px 12px',
-                                            borderRadius: '6px',
-                                            position: 'relative'
-                                        }}>
-                                            <div style={{fontWeight: 'bold'}}>{domain.name}</div>
-                                            <div style={{fontSize: '12px', opacity: 0.9}}>{domain.length}bp</div>
-                                            <button
-                                                onClick={() => removeDomain(domain.id)}
-                                                style={{
-                                                    position: 'absolute',
-                                                    top: '-8px',
-                                                    right: '-8px',
-                                                    background: '#dc3545',
-                                                    color: 'white',
-                                                    border: 'none',
-                                                    borderRadius: '50%',
-                                                    width: '20px',
-                                                    height: '20px',
-                                                    fontSize: '12px',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                ×
-                                            </button>
-                                        </div>
-                                        {index < currentStrand.domains.length - 1 && <span>→</span>}
-                                    </React.Fragment>
-                                ))}
-                            </div>
-                        </div>
-                    )}
 
-                    {/* Add Domain */}
-                    <div style={{
-                        border: '2px dashed #ccc',
-                        padding: '20px',
-                        borderRadius: '8px',
-                        marginBottom: '20px'
-                    }}>
+                    {/* Add Domain Section */}
+                    <div className="add-domain">
                         <h3>Add Domain</h3>
-                        <div style={{display: 'flex', gap: '10px', alignItems: 'end', marginBottom: '10px'}}>
+                        <div className="domain-inputs">
                             <div>
-                                <label style={{display: 'block', fontWeight: 'bold', marginBottom: '5px'}}>
-                                    Name:
-                                </label>
+                                <label className="form-label">Name:</label>
                                 <input
                                     type="text"
+                                    className="form-input"
                                     value={currentDomain.name}
                                     onChange={(e) => setCurrentDomain(prev => ({...prev, name: e.target.value}))}
                                     placeholder="e.g., Primer, Spacer"
-                                    style={{
-                                        padding: '8px',
-                                        borderRadius: '4px',
-                                        border: '1px solid #ccc'
-                                    }}
                                 />
                             </div>
                             <div>
-                                <label style={{display: 'block', fontWeight: 'bold', marginBottom: '5px'}}>
-                                    Length (bp):
-                                </label>
+                                <label className="form-label">Length (bp):</label>
                                 <input
                                     type="number"
+                                    className="form-input domain-length"
                                     value={currentDomain.length}
                                     onChange={(e) => setCurrentDomain(prev => ({
                                         ...prev,
                                         length: Number(e.target.value)
                                     }))}
-                                    style={{
-                                        padding: '8px',
-                                        borderRadius: '4px',
-                                        border: '1px solid #ccc',
-                                        width: '80px'
-                                    }}
                                 />
                             </div>
                             <button
                                 onClick={addDomain}
                                 disabled={!currentDomain.name}
-                                style={{
-                                    padding: '8px 16px',
-                                    backgroundColor: !currentDomain.name ? '#ccc' : '#007bff',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    cursor: !currentDomain.name ? 'not-allowed' : 'pointer'
-                                }}
+                                className="btn btn-primary"
                             >
                                 + Add Domain
                             </button>
@@ -885,20 +622,11 @@ const OligoDesigner = () => {
                     </div>
 
                     {/* Action Buttons */}
-                    <div style={{display: 'flex', gap: '10px', marginBottom: '20px'}}>
+                    <div className="action-buttons">
                         <button
                             onClick={generateOligo}
                             disabled={isGenerating || currentStrand.domains.length === 0}
-                            style={{
-                                padding: '12px 24px',
-                                backgroundColor: isGenerating || currentStrand.domains.length === 0 ? '#ccc' : '#28a745',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '6px',
-                                fontSize: '16px',
-                                cursor: isGenerating || currentStrand.domains.length === 0 ? 'not-allowed' : 'pointer',
-                                flex: 1
-                            }}
+                            className="btn btn-success"
                         >
                             {isGenerating ? '🔄 Generating...' : '▶ Generate & Validate'}
                         </button>
@@ -906,93 +634,78 @@ const OligoDesigner = () => {
                         <button
                             onClick={saveStrand}
                             disabled={currentStrand.domains.length === 0}
-                            style={{
-                                padding: '12px 24px',
-                                backgroundColor: currentStrand.domains.length === 0 ? '#ccc' : '#007bff',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '6px',
-                                fontSize: '16px',
-                                cursor: currentStrand.domains.length === 0 ? 'not-allowed' : 'pointer'
-                            }}
+                            className="btn btn-secondary"
                         >
                             💾 Save to Library
                         </button>
                     </div>
 
+                    {/* Save Message Display */}
+                    {saveMessage && (
+                        <div className={`error ${saveMessage.type === 'success' ? 'success-message' : ''}`}>
+                            {saveMessage.text}
+                        </div>
+                    )}
+
                     {/* Error Display */}
                     {error && (
-                        <div style={{
-                            background: '#f8d7da',
-                            color: '#721c24',
-                            padding: '12px',
-                            borderRadius: '6px',
-                            marginBottom: '20px',
-                            border: '1px solid #f5c6cb'
-                        }}>
+                        <div className="error">
                             <strong>Error:</strong> {error}
                         </div>
                     )}
 
                     {/* Results */}
                     {currentStrand.result && currentStrand.result.success && (
-                        <div style={{
-                            background: '#f8f9fa',
-                            padding: '20px',
-                            borderRadius: '8px',
-                            border: '1px solid #dee2e6'
-                        }}>
+                        <div className="results">
                             <h2>Results: {currentStrand.result.strand.name}</h2>
 
-                            <div style={{
-                                background: currentStrand.result.validation.overall_pass ? '#d4edda' : '#f8d7da',
-                                color: currentStrand.result.validation.overall_pass ? '#155724' : '#721c24',
-                                padding: '8px 12px',
-                                borderRadius: '4px',
-                                marginBottom: '16px',
-                                display: 'inline-block'
-                            }}>
+                            <div
+                                className={`status-badge ${currentStrand.result.validation.overall_pass ? 'status-success' : 'status-fail'}`}>
                                 {currentStrand.result.validation.overall_pass ? '✅ All Checks Passed' : '❌ Some Checks Failed'}
                             </div>
 
-                            <div style={{marginBottom: '16px'}}>
+                            <div className="result-stats">
                                 <strong>Length:</strong> {currentStrand.result.strand.total_length} bp |
                                 <strong> Time:</strong> {currentStrand.result.generation_time.toFixed(2)}s
                             </div>
 
-                            <div style={{marginBottom: '16px'}}>
+                            <div className="sequence-display">
                                 <strong>Final Sequence (5′ → 3′):</strong>
-                                <div style={{
-                                    background: '#fff',
-                                    padding: '12px',
-                                    marginTop: '8px',
-                                    borderRadius: '4px',
-                                    fontFamily: 'monospace',
-                                    fontSize: '14px',
-                                    wordBreak: 'break-all',
-                                    border: '1px solid #ccc'
-                                }}>
+                                <div className="sequence-box">
                                     {currentStrand.result.strand.sequence}
                                 </div>
                             </div>
 
-                            <h3>Validation Results</h3>
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-                                gap: '12px'
-                            }}>
-                                {Object.entries(currentStrand.result.validation.checks).map(([checkName, check]) => (
-                                    <div key={checkName} style={{
-                                        background: check.pass_check ? '#d4edda' : '#f8d7da',
-                                        padding: '12px',
-                                        borderRadius: '6px',
-                                        border: `1px solid ${check.pass_check ? '#c3e6cb' : '#f5c6cb'}`
-                                    }}>
-                                        <div style={{fontWeight: 'bold', marginBottom: '4px'}}>
-                                            {check.pass_check ? '✅' : '❌'} {checkName.replace(/_/g, ' ')}
-                                        </div>
-                                        <div style={{fontSize: '14px'}}>{check.message}</div>
+                            {/* Domain Breakdown */}
+                            {currentStrand.result.domains && (
+                                <div className="domain-breakdown">
+                                    <h3>Domain Breakdown</h3>
+                                    <div className="domain-results">
+                                        {currentStrand.result.domains.map((domain, index) => (
+                                            <div key={index} className="domain-result">
+                                                <div className="domain-result-header">
+                                                    <span className="domain-result-name">{domain.name}</span>
+                                                    <div className="domain-result-info">
+                                                        <span className="domain-result-length">{domain.length}bp</span>
+                                                        <span
+                                                            className={`domain-status-badge ${domain.valid ? 'domain-status-valid' : 'domain-status-invalid'}`}>
+                                                            {domain.valid ? 'Valid' : 'Invalid'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="domain-sequence">{domain.sequence}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Validation Results */}
+                            <div className="validation-results">
+                                {currentStrand.result.validation.results.map((result, index) => (
+                                    <div key={index} className={`validation-result ${result.pass ? 'pass' : 'fail'}`}>
+                                        <div className="validation-result-header">{result.name}</div>
+                                        <div className="validation-result-message">{result.message}</div>
                                     </div>
                                 ))}
                             </div>
@@ -1003,151 +716,70 @@ const OligoDesigner = () => {
 
             {/* Library Tab */}
             {activeTab === 'library' && (
-                <div style={{
-                    border: '1px solid #dee2e6',
-                    borderTop: 'none',
-                    padding: '20px',
-                    borderRadius: '0 0 8px 8px',
-                    backgroundColor: '#fff'
-                }}>
+                <div className="tab-content">
                     {strandLibrary.length === 0 ? (
-                        <div style={{textAlign: 'center', padding: '40px', color: '#6c757d'}}>
-                            <div style={{fontSize: '48px', marginBottom: '16px'}}>🧬</div>
-                            <h3>No strands saved yet</h3>
-                            <p>Design and save strands to build your library</p>
+                        <div className="library-empty">
+                            <div className="library-empty-icon">📚</div>
+                            <p>No strands saved yet. Design and save strands to build your library!</p>
                         </div>
                     ) : (
                         <>
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                                marginBottom: '20px'
-                            }}>
-                                <h2 style={{margin: 0}}>Strand Library</h2>
-                                <span style={{color: '#6c757d'}}>
-                  {strandLibrary.length} strand{strandLibrary.length !== 1 ? 's' : ''}
-                </span>
+                            <div className="library-header">
+                                <h2>Strand Library</h2>
+                                <span className="library-count">{strandLibrary.length} saved strands</span>
                             </div>
 
-                            <div style={{display: 'flex', flexDirection: 'column', gap: '16px'}}>
-                                {strandLibrary.map(strand => (
-                                    <div key={strand.id} style={{
-                                        border: '1px solid #dee2e6',
-                                        borderRadius: '8px',
-                                        padding: '16px',
-                                        backgroundColor: '#fff'
-                                    }}>
-                                        <div style={{
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'start',
-                                            marginBottom: '12px'
-                                        }}>
-                                            <div>
-                                                <h4 style={{margin: '0 0 4px 0', color: '#333'}}>{strand.name}</h4>
-                                                <p style={{margin: 0, color: '#6c757d', fontSize: '14px'}}>
-                                                    {strand.domains.length} domains • Saved {strand.savedAt}
-                                                </p>
+                            <div className="library-list">
+                                {strandLibrary.map((strand) => (
+                                    <div key={strand.id} className="library-item">
+                                        <div className="library-item-header">
+                                            <div className="library-item-info">
+                                                <h4>{strand.name}</h4>
+                                                <p className="library-item-meta">Saved: {strand.savedAt}</p>
                                             </div>
-                                            <div style={{display: 'flex', gap: '8px'}}>
+                                            <div className="library-actions">
                                                 <button
                                                     onClick={() => loadStrand(strand)}
-                                                    style={{
-                                                        padding: '4px 8px',
-                                                        backgroundColor: '#007bff',
-                                                        color: 'white',
-                                                        border: 'none',
-                                                        borderRadius: '4px',
-                                                        cursor: 'pointer',
-                                                        fontSize: '12px'
-                                                    }}
-                                                    title="Edit strand"
+                                                    className="library-action edit"
                                                 >
-                                                    ✏️ Edit
+                                                    Edit
                                                 </button>
                                                 <button
                                                     onClick={() => duplicateStrand(strand)}
-                                                    style={{
-                                                        padding: '4px 8px',
-                                                        backgroundColor: '#6c757d',
-                                                        color: 'white',
-                                                        border: 'none',
-                                                        borderRadius: '4px',
-                                                        cursor: 'pointer',
-                                                        fontSize: '12px'
-                                                    }}
-                                                    title="Duplicate strand"
+                                                    className="library-action copy"
                                                 >
-                                                    📋 Copy
+                                                    Copy
                                                 </button>
                                                 <button
                                                     onClick={() => deleteStrand(strand.id)}
-                                                    style={{
-                                                        padding: '4px 8px',
-                                                        backgroundColor: '#dc3545',
-                                                        color: 'white',
-                                                        border: 'none',
-                                                        borderRadius: '4px',
-                                                        cursor: 'pointer',
-                                                        fontSize: '12px'
-                                                    }}
-                                                    title="Delete strand"
+                                                    className="library-action delete"
                                                 >
-                                                    🗑️ Delete
+                                                    Delete
                                                 </button>
                                             </div>
                                         </div>
 
-                                        {/* Domain Preview */}
-                                        <div style={{
-                                            display: 'flex',
-                                            gap: '8px',
-                                            alignItems: 'center',
-                                            flexWrap: 'wrap'
-                                        }}>
+                                        <div className="library-domains">
                                             {strand.domains.map((domain, index) => (
                                                 <React.Fragment key={domain.id}>
-                                                    <div style={{
-                                                        background: '#e9ecef',
-                                                        color: '#495057',
-                                                        padding: '4px 8px',
-                                                        borderRadius: '4px',
-                                                        fontSize: '12px'
-                                                    }}>
+                                                    <span className="library-domain">
                                                         {domain.name} ({domain.length}bp)
-                                                    </div>
-                                                    {index < strand.domains.length - 1 &&
-                                                        <span style={{color: '#6c757d'}}>→</span>}
+                                                    </span>
+                                                    {index < strand.domains.length - 1 && <span>→</span>}
                                                 </React.Fragment>
                                             ))}
                                         </div>
 
-                                        {/* Result Preview */}
                                         {strand.result && (
-                                            <div style={{
-                                                marginTop: '12px',
-                                                paddingTop: '12px',
-                                                borderTop: '1px solid #dee2e6'
-                                            }}>
-                                                <div style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '8px',
-                                                    fontSize: '12px'
-                                                }}>
-                                                    <span style={{fontWeight: 'bold'}}>Last Result:</span>
-                                                    <span style={{
-                                                        padding: '2px 6px',
-                                                        borderRadius: '4px',
-                                                        backgroundColor: strand.result.validation?.overall_pass ? '#d4edda' : '#f8d7da',
-                                                        color: strand.result.validation?.overall_pass ? '#155724' : '#721c24'
-                                                    }}>
-                            {strand.result.validation?.overall_pass ? 'Passed' : 'Failed'} Validation
-                          </span>
-                                                    <span style={{color: '#6c757d'}}>
-                            {strand.result.strand?.total_length}bp
-                          </span>
+                                            <div className="library-result">
+                                                <div className="library-result-info">
+                                                    <span
+                                                        className={`library-result-status ${strand.result.validation.overall_pass ? 'library-result-pass' : 'library-result-fail'}`}>
+                                                        {strand.result.validation.overall_pass ? 'Valid' : 'Failed'}
+                                                    </span>
+                                                    <span className="library-result-length">
+                                                        {strand.result.strand.total_length}bp
+                                                    </span>
                                                 </div>
                                             </div>
                                         )}
