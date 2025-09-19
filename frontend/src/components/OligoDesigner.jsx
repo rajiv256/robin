@@ -1,7 +1,6 @@
 import React, {useState} from 'react';
 import './OligoDesigner.css';
 
-
 // Real API function that connects to Redis database
 const generateStrand = async (requestData) => {
     try {
@@ -47,6 +46,9 @@ const OligoDesigner = () => {
         name: '',
         length: 20
     });
+
+    // Domain registry - tracks all domains and their sequences
+    const [domainRegistry, setDomainRegistry] = useState({});
 
     // UI state
     const [isGenerating, setIsGenerating] = useState(false);
@@ -102,16 +104,160 @@ const OligoDesigner = () => {
 
     const [showAdvanced, setShowAdvanced] = useState(false);
 
-    // Add domain to current strand
+    // Helper functions for complement handling
+    const getComplementName = (domainName) => {
+        if (domainName.endsWith('*')) {
+            return domainName.slice(0, -1); // Remove *
+        } else {
+            return domainName + '*'; // Add *
+        }
+    };
+
+    const getComplementSequence = (sequence) => {
+        const complementMap = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'};
+        return sequence.split('').reverse().map(base =>
+            complementMap[base.toUpperCase()] || base
+        ).join('');
+    };
+
+
+    const findComplementInRegistry = (domainName, length) => {
+        const complementName = getComplementName(domainName);
+        const domain = domainRegistry[complementName];
+        return domain && domain.length === length ? domain : null;
+    };
+
+    // Check if current domain name exists in registry OR if its complement exists
+    const isDomainInRegistry = (domainName) => {
+        if (!domainName) return false;
+        // Check if domain itself exists
+        if (domainRegistry.hasOwnProperty(domainName)) return true;
+        // Check if its complement exists (which means we can generate this domain)
+        const complementName = getComplementName(domainName);
+        return domainRegistry.hasOwnProperty(complementName);
+    };
+
+    // Get the length of a domain - either from itself or from its complement
+    const getDomainLength = (domainName) => {
+        if (!domainName) return null;
+        // Check if domain itself exists
+        if (domainRegistry[domainName]) {
+            return domainRegistry[domainName].length;
+        }
+        // Check if its complement exists
+        const complementName = getComplementName(domainName);
+        if (domainRegistry[complementName]) {
+            return domainRegistry[complementName].length;
+        }
+        return null;
+    };
+
+    // Update domain registry with generated sequences and auto-create complements
+    const updateDomainRegistry = (domains) => {
+        setDomainRegistry(prev => {
+            const updated = {...prev};
+
+            domains.forEach(domain => {
+                if (domain.sequence) {
+                    // Add the domain itself
+                    updated[domain.name] = {
+                        name: domain.name,
+                        length: domain.length,
+                        sequence: domain.sequence
+                    };
+
+                    // Auto-create reverse complement only if it's not already a complement
+                    if (!domain.name.endsWith('*')) {
+                        const complementName = getComplementName(domain.name);
+                        const complementSequence = getComplementSequence(domain.sequence);
+
+                        updated[complementName] = {
+                            name: complementName,
+                            length: domain.length,
+                            sequence: complementSequence
+                        };
+                    }
+                }
+            });
+            return updated;
+        });
+    };
+
+    // Add domain to current strand with complement handling
     const addDomain = () => {
         if (currentDomain.name) {
+            const existingDomain = domainRegistry[currentDomain.name];
+            let domainToAdd;
+
+            if (existingDomain) {
+                // Use existing domain from registry
+                domainToAdd = {
+                    id: Date.now(),
+                    name: currentDomain.name,
+                    length: existingDomain.length,
+                    fixed_sequence: existingDomain.sequence,
+                    target_gc_content: 50
+                };
+            } else {
+                // Check if this is a complement of an existing domain
+                const baseName = currentDomain.name.endsWith('*')
+                    ? currentDomain.name.slice(0, -1)
+                    : currentDomain.name + '*';
+                const baseDomain = domainRegistry[baseName];
+
+                if (baseDomain) {
+                    // This is a complement - generate sequence from base domain
+                    const complementSequence = getComplementSequence(baseDomain.sequence);
+                    domainToAdd = {
+                        id: Date.now(),
+                        name: currentDomain.name,
+                        length: baseDomain.length,
+                        fixed_sequence: complementSequence,
+                        target_gc_content: 50
+                    };
+
+                    // Also add this complement to the registry
+                    setDomainRegistry(prev => ({
+                        ...prev,
+                        [currentDomain.name]: {
+                            name: currentDomain.name,
+                            length: baseDomain.length,
+                            sequence: complementSequence
+                        }
+                    }));
+                } else {
+                    // Completely new domain - will be generated
+                    domainToAdd = {
+                        id: Date.now(),
+                        name: currentDomain.name,
+                        length: currentDomain.length,
+                        fixed_sequence: null,
+                        target_gc_content: 50
+                    };
+                }
+            }
+
+            setCurrentStrand(prev => ({
+                ...prev,
+                domains: [...prev.domains, domainToAdd]
+            }));
+            setCurrentDomain({name: '', length: 20});
+        }
+    };
+
+    // Add complement domain
+    const addComplementDomain = () => {
+        const complementName = getComplementName(currentDomain.name);
+        const complement = findComplementInRegistry(currentDomain.name, currentDomain.length);
+
+        if (complement) {
             setCurrentStrand(prev => ({
                 ...prev,
                 domains: [...prev.domains, {
                     id: Date.now(),
-                    name: currentDomain.name,
+                    name: complementName,
                     length: currentDomain.length,
-                    fixed_sequence: null,
+                    fixed_sequence: complement.sequence,
                     target_gc_content: 50
                 }]
             }));
@@ -216,6 +362,11 @@ const OligoDesigner = () => {
             const response = await generateStrand(requestData);
             console.log('Got response:', response);
 
+            // Update domain registry with generated sequences
+            if (response.success && response.domains) {
+                updateDomainRegistry(response.domains);
+            }
+
             setCurrentStrand(prev => ({...prev, result: response}));
 
         } catch (err) {
@@ -225,6 +376,7 @@ const OligoDesigner = () => {
 
         setIsGenerating(false);
     };
+
 
     return (
         <div className="oligo-designer">
@@ -270,6 +422,9 @@ const OligoDesigner = () => {
                                         <div className="domain-badge">
                                             <div className="domain-name">{domain.name}</div>
                                             <div className="domain-length">{domain.length}bp</div>
+                                            {domain.fixed_sequence && (
+                                                <div className="domain-complement-indicator">🧬</div>
+                                            )}
                                             <button
                                                 onClick={() => removeDomain(domain.id)}
                                                 className="domain-remove"
@@ -572,20 +727,35 @@ const OligoDesigner = () => {
                                     type="text"
                                     className="form-input"
                                     value={currentDomain.name}
-                                    onChange={(e) => setCurrentDomain(prev => ({...prev, name: e.target.value}))}
-                                    placeholder="e.g., Primer, Spacer"
+                                    onChange={(e) => {
+                                        const newName = e.target.value;
+                                        setCurrentDomain(prev => ({
+                                            ...prev,
+                                            name: newName,
+                                            // Auto-update length if this domain exists in registry
+                                            length: isDomainInRegistry(newName)
+                                                ? getDomainLength(newName) || prev.length
+                                                : prev.length
+                                        }));
+                                    }}
+                                    placeholder="e.g., a, b, a*"
                                 />
                             </div>
                             <div>
-                                <label className="form-label">Length (bp):</label>
+                                <label className="form-label">
+                                    Length (bp):
+                                    {isDomainInRegistry(currentDomain.name) &&
+                                        <span className="disabled-indicator"> (auto-set from registry)</span>}
+                                </label>
                                 <input
                                     type="number"
-                                    className="form-input domain-length"
-                                    value={currentDomain.length}
-                                    onChange={(e) => setCurrentDomain(prev => ({
+                                    className={`form-input domain-length ${isDomainInRegistry(currentDomain.name) ? 'disabled' : ''}`}
+                                    value={isDomainInRegistry(currentDomain.name) ? getDomainLength(currentDomain.name) : currentDomain.length}
+                                    onChange={(e) => !isDomainInRegistry(currentDomain.name) && setCurrentDomain(prev => ({
                                         ...prev,
                                         length: Number(e.target.value)
                                     }))}
+                                    disabled={isDomainInRegistry(currentDomain.name)}
                                 />
                             </div>
                             <button
@@ -594,8 +764,45 @@ const OligoDesigner = () => {
                                 className="btn btn-primary"
                             >
                                 + Add Domain
+                                {isDomainInRegistry(currentDomain.name) && <span className="complement-badge">📋</span>}
                             </button>
+
+                            {/* Show complement suggestion */}
+                            {currentDomain.name && (() => {
+                                const complement = findComplementInRegistry(currentDomain.name, currentDomain.length);
+                                return complement && !isDomainInRegistry(currentDomain.name) ? (
+                                    <button
+                                        onClick={addComplementDomain}
+                                        className="btn btn-complement"
+                                    >
+                                        + Add Complement ({getComplementName(currentDomain.name)})
+                                    </button>
+                                ) : null;
+                            })()}
                         </div>
+
+                        {/* Show domain registry */}
+                        {Object.keys(domainRegistry).length > 0 && (
+                            <div className="domain-registry">
+                                <h4>Available Domains:</h4>
+                                <div className="domain-registry-list">
+                                    {Object.values(domainRegistry).map(domain => (
+                                        <span
+                                            key={domain.name}
+                                            className={`domain-registry-item ${domain.name.endsWith('*') ? 'complement-domain' : ''}`}
+                                            onClick={() => setCurrentDomain({
+                                                name: domain.name,
+                                                length: domain.length
+                                            })}
+                                            title={`Click to use: ${domain.sequence}`}
+                                        >
+                                            {domain.name} ({domain.length}bp)
+                                            {domain.name.endsWith('*') && <span className="complement-star">🧬</span>}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Action Buttons */}
@@ -653,24 +860,42 @@ const OligoDesigner = () => {
                                 </div>
                             </div>
 
-                            {/* Domain Breakdown */}
+                            {/* Domain Breakdown with Complement Validation */}
                             {currentStrand.result.domains && (
                                 <div className="domain-breakdown">
                                     <h3>Domain Breakdown</h3>
                                     <div className="domain-results">
-                                        {currentStrand.result.domains.map((domain, index) => (
-                                            <div key={index} className="domain-result">
-                                                <div className="domain-result-header">
-                                                    <span className="domain-result-name">{domain.name}</span>
-                                                    <div className="domain-result-info">
-                                                        <span className="domain-result-length">{domain.length}bp</span>
-                                                    </div>
-                                                </div>
-                                                <div className="domain-sequence">{domain.sequence}</div>
-                                            </div>
-                                        ))}
-                                    </div>
+                                        {currentStrand.result.domains.map((domain, index) => {
+                                            const complement = findComplementInRegistry(domain.name, domain.length);
+                                            const isValidComplement = complement &&
+                                                getComplementSequence(domain.sequence) === complement.sequence;
 
+                                            return (
+                                                <div key={index} className="domain-result">
+                                                    <div className="domain-result-header">
+                                                        <span className="domain-result-name">{domain.name}</span>
+                                                        <div className="domain-result-info">
+                                                            <span
+                                                                className="domain-result-length">{domain.length}bp</span>
+                                                            {complement && (
+                                                                <span
+                                                                    className={`domain-status-badge ${isValidComplement ? 'domain-status-valid' : 'domain-status-invalid'}`}>
+                                                                    {isValidComplement ? 'Complement OK' : 'Complement Mismatch'}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="domain-sequence">{domain.sequence}</div>
+                                                    {complement && (
+                                                        <div className="complement-info">
+                                                            Complement
+                                                            ({getComplementName(domain.name)}): {complement.sequence}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
 

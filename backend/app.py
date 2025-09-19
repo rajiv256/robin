@@ -99,8 +99,14 @@ class StrandGenerator:
 
             print(f"Finding sequence for {domain_name} (length: {domain_length})")
 
-            # Get candidate sequences from Redis
-            candidates = self.get_sequences_by_criteria(domain_length, max_count=50)
+            if domain.get('fixed_sequence'):
+                print(f'---> domain: {domain}!!!!')
+                domain['sequence'] = domain['fixed_sequence']
+                candidates = [domain]  # This added by Rajiv, to use cached domains.
+            else:
+                # Get candidate sequences from Redis
+                candidates = self.get_sequences_by_criteria(domain_length, max_count=50)
+                print(f'--> gen.. {candidates[0]}')
 
             if not candidates:
                 return {'success': False,
