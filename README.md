@@ -3,6 +3,27 @@
 Design orthogonal DNA strands with thermodynamic validation. Build multi-domain sequences and validate them for
 hairpins, dimerization, and melting temperatures.
 
+
+
+## Setup
+
+### Requirements
+
+- Python 3.10
+- Node.js and npm
+
+### Backend Setup
+
+```bash
+cd robin/
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
 ## Adding Oligos from a file
 
 Install dependencies
@@ -28,24 +49,6 @@ python src/oligo_dashboard.py
 # Open http://localhost:5010 in browser
 ```
 
-## Setup
-
-### Requirements
-
-- Python 3.10
-- Node.js and npm
-
-### Backend Setup
-
-```bash
-cd robin/
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
 
 ### Frontend Setup
 
