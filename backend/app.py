@@ -1,319 +1,537 @@
-#!/usr/bin/env python3
-"""
-DNA Strand Generator integrated with OligoDesigner Frontend
-Creates strands from Redis database based on frontend domain specifications
-"""
-
-import redis
-import json
-import primer3
-from typing import List, Dict, Optional, Tuple
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import redis
+import json
+import random
+import uuid
+from typing import Dict, List, Optional
+import primer3
 
 app = Flask(__name__)
 CORS(app)
 
+# Redis connection
+r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
 
-class StrandGenerator:
-    """Generate DNA strands from Redis database using frontend domain specifications"""
+# In-memory domain cache (not stored in Redis)
+domain_cache = {}
 
-    def __init__(self, redis_host='localhost', redis_port=6379, redis_db=0):
-        """Initialize Redis connection"""
-        self.redis_client = redis.Redis(
-            host=redis_host,
-            port=redis_port,
-            db=redis_db,
-            decode_responses=True
-        )
 
-        # Test connection
-        self.redis_client.ping()
-        print(f"Connected to Redis at {redis_host}:{redis_port}")
+class OligoDesigner:
+    def __init__(self):
+        self.bases = ['A', 'T', 'G', 'C']
 
-    def get_sequences_by_criteria(self, length: int, max_count: int = 100) -> List[Dict]:
-        """Get sequences from Redis that match length criteria"""
-        seq_ids = list(self.redis_client.smembers(f"oligo:length:{length}"))
-        print("length, ", len(seq_ids))
+    def reverse_complement(self, sequence: str) -> str:
+        """Generate reverse complement of DNA sequence"""
+        complement = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G'}
+        return ''.join(complement[base] for base in reversed(sequence))
 
+    def gc_content(self, sequence: str) -> float:
+        """Calculate GC content percentage"""
+        if not sequence:
+            return 0
+        gc_count = sequence.count('G') + sequence.count('C')
+        return (gc_count / len(sequence)) * 100
+
+    def melting_temp(self, sequence: str) -> float:
+        """Calculate melting temperature using simple formula"""
+        if len(sequence) < 14:
+            return 2 * (sequence.count('A') + sequence.count('T')) + 4 * (sequence.count('G') + sequence.count('C'))
+        else:
+            gc = self.gc_content(sequence)
+            return 64.9 + 41 * (gc - 16.4) / 100
+
+    def validate_sequence(self, sequence: str, settings: Dict) -> Dict:
+        """Validate sequence against all criteria using primer3"""
+        results = {
+            'gc_content': {'valid': True, 'value': 0, 'message': ''},
+            'melting_temp': {'valid': True, 'value': 0, 'message': ''},
+            'hairpin_dg': {'valid': True, 'value': 0, 'message': ''},
+            'self_dimer_dg': {'valid': True, 'value': 0, 'message': ''},
+            'overall_valid': True
+        }
+
+        # GC content check
+        gc = self.gc_content(sequence)
+        results['gc_content']['value'] = round(gc, 1)
+        if not (settings['gc_min'] <= gc <= settings['gc_max']):
+            results['gc_content']['valid'] = False
+            results['gc_content'][
+                'message'] = f"GC content {gc:.1f}% outside range {settings['gc_min']}-{settings['gc_max']}%"
+            results['overall_valid'] = False
+
+        # Melting temperature check
+        tm = self.melting_temp(sequence)
+        results['melting_temp']['value'] = round(tm, 1)
+        if not (settings['tm_min'] <= tm <= settings['tm_max']):
+            results['melting_temp']['valid'] = False
+            results['melting_temp'][
+                'message'] = f"Tm {tm:.1f}°C outside range {settings['tm_min']}-{settings['tm_max']}°C"
+            results['overall_valid'] = False
+
+        # Thermodynamic checks using primer3
+        try:
+            temp = settings.get('temp', 37)
+
+            # Hairpin check
+            try:
+                hairpin_result = primer3.calc_hairpin(sequence, mv_conc=50, dv_conc=1.5,
+                                                      dntp_conc=0.6, dna_conc=50, temp_c=temp)
+                hairpin_dg = hairpin_result.dg / 1000.0  # Convert cal/mol to kcal/mol
+                results['hairpin_dg']['value'] = round(hairpin_dg, 2)
+
+                if hairpin_dg < settings['hairpin_dg']:
+                    results['hairpin_dg']['valid'] = False
+                    results['hairpin_dg'][
+                        'message'] = f"Hairpin ΔG {hairpin_dg:.2f} kcal/mol below threshold {settings['hairpin_dg']}"
+                    results['overall_valid'] = False
+            except Exception:
+                results['hairpin_dg']['value'] = -1.0
+
+            # Self-dimer check
+            try:
+                homodimer_result = primer3.calc_homodimer(sequence, mv_conc=50, dv_conc=1.5,
+                                                          dntp_conc=0.6, dna_conc=50, temp_c=temp)
+                self_dimer_dg = homodimer_result.dg / 1000.0  # Convert cal/mol to kcal/mol
+                results['self_dimer_dg']['value'] = round(self_dimer_dg, 2)
+
+                if self_dimer_dg < settings['self_dimer_dg']:
+                    results['self_dimer_dg']['valid'] = False
+                    results['self_dimer_dg'][
+                        'message'] = f"Self-dimer ΔG {self_dimer_dg:.2f} kcal/mol below threshold {settings['self_dimer_dg']}"
+                    results['overall_valid'] = False
+            except Exception:
+                results['self_dimer_dg']['value'] = -3.0
+
+        except Exception:
+            pass
+
+        return results
+
+    def calculate_cross_dimer_dg(self, seq1: str, seq2: str, temp: float = 37) -> float:
+        """Calculate cross-dimer ΔG using primer3"""
+        try:
+            heterodimer_result = primer3.calc_heterodimer(seq1, seq2, mv_conc=50, dv_conc=1.5,
+                                                          dntp_conc=0.6, dna_conc=50, temp_c=temp)
+            return heterodimer_result.dg / 1000.0
+        except Exception:
+            return 0.0
+
+
+def get_validation_messages(validation_results: Dict) -> List[str]:
+    """Extract human-readable validation failure messages"""
+    messages = []
+
+    if not validation_results.get('overall_valid', True):
+        for check, result in validation_results.items():
+            if check == 'overall_valid':
+                continue
+
+            if isinstance(result, dict) and not result.get('valid', True):
+                message = result.get('message', '')
+                if message:
+                    messages.append(message)
+                else:
+                    # Fallback message if no specific message
+                    if check == 'gc_content':
+                        messages.append(f"GC content {result.get('value', 'N/A')}% out of range")
+                    elif check == 'melting_temp':
+                        messages.append(f"Melting temperature {result.get('value', 'N/A')}°C out of range")
+                    elif check == 'hairpin_dg':
+                        messages.append(f"Hairpin ΔG {result.get('value', 'N/A')} kcal/mol too low")
+                    elif check == 'self_dimer_dg':
+                        messages.append(f"Self-dimer ΔG {result.get('value', 'N/A')} kcal/mol too low")
+
+    return messages
+
+
+# Initialize designer
+designer = OligoDesigner()
+
+
+# Helper functions for Redis operations (oligo sequences)
+def get_oligos_by_length(length: int) -> List[str]:
+    """Get all oligo sequences of specific length from Redis"""
+    try:
+        # Get sequence IDs for this length
+        seq_ids = r.smembers(f"oligo:length:{length}")
+
+        # Get actual sequences from the oligo records
         sequences = []
-        for seq_id in seq_ids[:max_count * 2]:  # Get extra for filtering
-            data = self.redis_client.hget(f"oligo:{seq_id}", 'data')
-            if data:
-                sequences.append(json.loads(data))
+        for seq_id in seq_ids:
+            sequence = r.hget(f"oligo:{seq_id}", "sequence")
+            if sequence:
+                sequences.append(sequence)
 
-        return self._filter_quality_sequences(sequences)[:max_count]
-
-    def _filter_quality_sequences(self, sequences: List[Dict]) -> List[Dict]:
-        # """Filter sequences based on quality criteria"""
-        # filtered = []
-        #
-        # for seq in sequences:
-        #     # Quality criteria based on thermodynamic properties
-        #     if (seq['hairpin_dg'] > -3.0 and  # Low hairpin formation
-        #             seq['homodimer_dg'] > -6.0 and  # Low self-dimerization
-        #             not seq['has_repeats'] and  # No repeats
-        #             40 <= seq['gc_content'] <= 60 and  # Reasonable GC content
-        #             seq['complexity'] > 0.7):  # Good sequence complexity
-        #         filtered.append(seq)
-        #
-        # # Sort by thermodynamic stability (lower absolute energy = better)
-        # filtered.sort(key=lambda x: abs(x['hairpin_dg']) + abs(x['homodimer_dg']))
-        # return filtered
         return sequences
+    except Exception:
+        return []
 
-    def check_cross_compatibility(self, sequences: List[str]) -> List[Tuple[int, int, float]]:
-        """Check cross-dimerization between all sequence pairs"""
-        cross_dimers = []
 
-        for i in range(len(sequences)):
-            for j in range(i + 1, len(sequences)):
-                result = primer3.calc_heterodimer(
-                    sequences[i], sequences[j],
-                    mv_conc=50.0, dv_conc=0.0, dntp_conc=0.0, temp_c=37.0
-                )
-                dg = result.dg / 1000.0  # Convert to kcal/mol
-                cross_dimers.append((i, j, dg))
+def get_all_oligo_lengths() -> List[int]:
+    """Get all available oligo lengths from Redis"""
+    try:
+        keys = r.keys("oligo:length:*")
+        lengths = [int(key.split(':')[2]) for key in keys if r.scard(key) > 0]
+        return sorted(lengths)
+    except Exception:
+        return []
 
-        return cross_dimers
 
-    def generate_strand_from_domains(self, strand_request: Dict) -> Dict:
-        """Generate strand based on frontend domain specifications"""
-        domains = strand_request.get('domains', [])
-        strand_name = strand_request.get('strand_name', 'Generated Strand')
-        global_params = strand_request.get('global_params', {})
-        validation_settings = strand_request.get('validation_settings', {})
+def get_random_oligo(length: int) -> Optional[str]:
+    """Get random oligo sequence of specific length from Redis"""
+    oligos = get_oligos_by_length(length)
+    if oligos:
+        return random.choice(oligos)
+    return None
+
+
+def get_oligo_with_properties(length: int) -> Optional[Dict]:
+    """Get random oligo with its thermodynamic properties"""
+    try:
+        # Get sequence IDs for this length
+        seq_ids = list(r.smembers(f"oligo:length:{length}"))
+        if not seq_ids:
+            return None
+
+        # Pick random sequence ID
+        seq_id = random.choice(seq_ids)
+
+        # Get the full oligo data
+        oligo_data = r.hget(f"oligo:{seq_id}", "data")
+        if oligo_data:
+            return json.loads(oligo_data)
+
+        return None
+    except Exception:
+        return None
+
+
+# In-memory strand storage
+strands = {}
+
+
+# API Routes
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint"""
+    try:
+        r.ping()
+        available_lengths = get_all_oligo_lengths()
+
+        # Get database statistics
+        total_oligos = r.scard('oligo:all') if r.exists('oligo:all') else 0
+
+        # Get metadata if available
+        metadata = r.hgetall('oligo:metadata')
+
+        return jsonify({
+            'status': 'healthy',
+            'redis': 'connected',
+            'server': 'Flask server running',
+            'database': {
+                'total_oligos': total_oligos,
+                'available_lengths': available_lengths,
+                'metadata': metadata
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/domain-cache', methods=['GET'])
+def get_cache():
+    """Get in-memory domain cache"""
+    cache_list = [{'name': name, 'length': length} for name, length in domain_cache.items()]
+    return jsonify(cache_list)
+
+
+@app.route('/api/domain-cache/<domain_name>', methods=['DELETE'])
+def remove_cache_domain(domain_name):
+    """Remove domain from in-memory cache"""
+    try:
+        if domain_name in domain_cache:
+            del domain_cache[domain_name]
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/domains', methods=['GET'])
+def get_domains():
+    """Get domain cache as domain list for frontend compatibility"""
+    # Return empty list since we don't store domain instances
+    return jsonify([])
+
+
+@app.route('/api/domains', methods=['POST'])
+def add_domain():
+    """Add domain to in-memory cache"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
+
+        if 'name' not in data or not data['name'].strip():
+            return jsonify({'success': False, 'error': 'Domain name is required'}), 400
+
+        if 'length' not in data:
+            return jsonify({'success': False, 'error': 'Domain length is required'}), 400
+
+        try:
+            length = int(data['length'])
+            if length < 1 or length > 100:
+                return jsonify({'success': False, 'error': 'Domain length must be between 1 and 100'}), 400
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Domain length must be a valid number'}), 400
+
+        name = data['name'].strip().rstrip('*')
+
+        # Check if domain already exists in cache
+        if name in domain_cache:
+            return jsonify({'success': False, 'error': f'Domain "{name}" already exists in cache'}), 400
+
+        # Check if we have oligos of this length in Redis
+        available_oligos = get_oligos_by_length(length)
+        if not available_oligos:
+            return jsonify({'success': False, 'error': f'No oligos of length {length} found in Redis database'}), 400
+
+        # Add to in-memory cache
+        domain_cache[name] = length
+
+        return jsonify({
+            'success': True,
+            'message': f'Added domain "{name}" to cache with length {length}nt ({len(available_oligos)} oligos available)'
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/strands', methods=['GET'])
+def get_strands():
+    """Get all strands from memory"""
+    strand_list = []
+    for strand_id, strand_data in strands.items():
+        strand_list.append({
+            'id': strand_id,
+            'name': strand_data['name'],
+            'domains': strand_data['domains'],
+            'sequence': strand_data.get('sequence', ''),
+            'validation_results': strand_data.get('validation_results', {})
+        })
+    return jsonify(sorted(strand_list, key=lambda x: x['name']))
+
+
+@app.route('/api/strands', methods=['POST'])
+def add_strand():
+    """Add new strand"""
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON data provided'}), 400
+
+        name = data.get('name', '').strip()
+        domains = data.get('domains', [])
+
+        if not name:
+            return jsonify({'success': False, 'error': 'Strand name is required'}), 400
 
         if not domains:
-            return {'success': False, 'error': 'No domains specified'}
+            return jsonify({'success': False, 'error': 'At least one domain is required'}), 400
 
-        print(f"Generating strand '{strand_name}' with {len(domains)} domains")
+        # Validate that all domains exist in cache
+        for domain_name in domains:
+            base_name = domain_name.rstrip('*')
+            if base_name not in domain_cache:
+                return jsonify(
+                    {'success': False, 'error': f'Domain "{base_name}" not found in cache. Add it first.'}), 400
 
-        # Generate sequences for each domain
-        generated_domains = []
-        all_sequences = []
+        strand_id = str(uuid.uuid4())
+        strands[strand_id] = {
+            'name': name,
+            'domains': domains
+        }
 
-        for i, domain in enumerate(domains):
-            domain_name = domain.get('name', f'Domain_{i + 1}')
-            domain_length = domain.get('length', 15)
+        return jsonify({'success': True, 'id': strand_id})
 
-            print(f"Finding sequence for {domain_name} (length: {domain_length})")
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-            if domain.get('fixed_sequence'):
-                print(f'---> domain: {domain}!!!!')
-                domain['sequence'] = domain['fixed_sequence']
-                candidates = [domain]  # This added by Rajiv, to use cached domains.
+
+@app.route('/api/strands/<strand_id>', methods=['DELETE'])
+def delete_strand(strand_id):
+    """Delete strand"""
+    try:
+        if strand_id in strands:
+            del strands[strand_id]
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/generate-strands', methods=['POST'])
+def generate_strands():
+    """Generate strand sequences by randomly selecting oligos from Redis"""
+    data = request.json
+    settings = data.get('settings', {})
+    strand_ids = data.get('strand_ids', [])
+
+    try:
+        # Get target strands
+        target_strands = [strands[sid] for sid in strand_ids if sid in strands]
+
+        if not target_strands:
+            return jsonify({'success': False, 'error': 'No strands selected'})
+
+        # Collect all unique base domain names needed
+        required_domains = set()
+        for strand in target_strands:
+            for domain_name in strand['domains']:
+                base_name = domain_name.rstrip('*')
+                required_domains.add(base_name)
+
+        # Randomly select oligo sequences for each required domain
+        domain_assignments = {}
+        errors = []
+
+        for base_name in required_domains:
+            if base_name not in domain_cache:
+                errors.append(f"Domain '{base_name}' not found in cache")
+                continue
+
+            length = domain_cache[base_name]
+
+            # Get random oligo sequence of this length from Redis
+            base_sequence = get_random_oligo(length)
+
+            if base_sequence:
+                domain_assignments[base_name] = base_sequence
+                domain_assignments[base_name + '*'] = designer.reverse_complement(base_sequence)
             else:
-                # Get candidate sequences from Redis
-                candidates = self.get_sequences_by_criteria(domain_length, max_count=50)
-                print(f'--> gen.. {candidates[0]}')
+                errors.append(f"No oligo sequences of length {length} found in Redis for domain '{base_name}'")
 
-            if not candidates:
-                return {'success': False,
-                        'error': f'No suitable sequences found for {domain_name} (length {domain_length})'}
+        # Build strand sequences using assigned domain sequences
+        generated_strands = []
+        for strand in target_strands:
+            strand_seq = ""
+            can_build = True
 
-            # Select best sequence that doesn't cross-react with existing domains
-            selected_seq = None
-            for candidate in candidates:
-                seq = candidate['sequence']
-
-                # Check cross-reactivity with already selected sequences
-                compatible = True
-                for existing_seq in all_sequences:
-                    cross_dg = self._calc_cross_dimer(seq, existing_seq)
-                    if cross_dg < -6.0:  # Too much cross-reactivity
-                        compatible = False
-                        break
-
-                if compatible:
-                    selected_seq = candidate
+            for domain_name in strand['domains']:
+                if domain_name in domain_assignments:
+                    strand_seq += domain_assignments[domain_name]
+                else:
+                    can_build = False
                     break
 
-            if not selected_seq:
-                # Fallback: use best candidate anyway with warning
-                selected_seq = candidates[0]
-                print(f"Warning: Using potentially cross-reactive sequence for {domain_name}")
+            if can_build and strand_seq:
+                # Validate the complete strand sequence
+                strand_validation = designer.validate_sequence(strand_seq, settings)
 
-            # Store domain with sequence (no individual validation)
-            generated_domains.append({
-                'name': domain_name,
-                'length': domain_length,
-                'sequence': selected_seq['sequence']
+                # Update strand with sequence and validation
+                strand_id = next(sid for sid, s in strands.items() if s == strand)
+                strands[strand_id]['sequence'] = strand_seq
+                strands[strand_id]['validation_results'] = strand_validation
+
+                generated_strands.append({
+                    'name': strand['name'],
+                    'sequence': strand_seq,
+                    'length': len(strand_seq),
+                    'valid': strand_validation['overall_valid'],
+                    'validation_details': strand_validation,
+                    'validation_messages': get_validation_messages(strand_validation)
+                })
+            else:
+                errors.append(f"Could not build sequence for strand '{strand['name']}'")
+
+        # Prepare response
+        success = len(errors) == 0
+        message = f"Built {len(generated_strands)} strands using random oligos from Redis"
+        if errors:
+            message += f" with {len(errors)} errors"
+
+        return jsonify({
+            'success': success,
+            'message': message,
+            'generated_strands': generated_strands,
+            'errors': errors
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/check-cross-dimers', methods=['POST'])
+def check_cross_dimers():
+    """Check cross-dimer interactions between selected strands"""
+    data = request.json
+    settings = data.get('settings', {})
+    strand_ids = data.get('strand_ids', [])
+
+    try:
+        # Get target strands with sequences
+        target_strands = []
+        for sid in strand_ids:
+            if sid in strands and strands[sid].get('sequence'):
+                target_strands.append({
+                    'id': sid,
+                    'name': strands[sid]['name'],
+                    'sequence': strands[sid]['sequence']
+                })
+
+        if len(target_strands) < 2:
+            return jsonify({
+                'success': False,
+                'error': 'Need at least 2 strands with sequences for cross-dimer analysis. Build strands first.'
             })
 
-            all_sequences.append(selected_seq['sequence'])
-
-        # Construct full strand
-        full_sequence = ''.join([d['sequence'] for d in generated_domains])
-
-        # Calculate full strand properties
-        strand_properties = self._calculate_full_strand_properties(
-            full_sequence, global_params
-        )
-
-        # Validate only the full strand
-        validation_results = self._validate_full_strand(
-            full_sequence, global_params, validation_settings
-        )
-
-        result = {
-            'success': True,
-            'strand': {
-                'name': strand_name,
-                'sequence': full_sequence,
-                'total_length': len(full_sequence)
-            },
-            'validation': validation_results,
-            'generation_time': 0.5,
-            'domains': generated_domains  # Include for frontend display
-        }
-
-        return result
-
-    def _calc_cross_dimer(self, seq1: str, seq2: str) -> float:
-        """Calculate cross-dimer energy between two sequences"""
-        result = primer3.calc_heterodimer(seq1, seq2, mv_conc=50.0, temp_c=37.0)
-        return result.dg / 1000.0
-
-    def _calculate_full_strand_properties(self, sequence: str, global_params: Dict) -> Dict:
-        """Calculate thermodynamic properties of full strand"""
-        # Use global_params if provided, otherwise defaults
-        mv_conc = global_params.get('salt_conc', 50.0)
-        dv_conc = global_params.get('mg_conc', 0.0)
-        dna_conc = global_params.get('oligo_conc', 250.0)
-        temp = global_params.get('reaction_temp', 37.0)
-
-        # Calculate properties using primer3
-        tm = primer3.calc_tm(sequence, mv_conc=mv_conc, dv_conc=dv_conc, dna_conc=dna_conc)
-
-        hairpin_result = primer3.calc_hairpin(sequence, mv_conc=mv_conc, dv_conc=dv_conc, temp_c=temp)
-        hairpin_dg = hairpin_result.dg / 1000.0
-
-        homodimer_result = primer3.calc_homodimer(sequence, mv_conc=mv_conc, dv_conc=dv_conc, temp_c=temp)
-        homodimer_dg = homodimer_result.dg / 1000.0
-
-        gc_content = (sequence.count('G') + sequence.count('C')) / len(sequence) * 100
-
-        return {
-            'melting_temp': round(tm, 2),
-            'hairpin_dg': round(hairpin_dg, 2),
-            'homodimer_dg': round(homodimer_dg, 2),
-            'gc_content': round(gc_content, 2),
-            'length': len(sequence)
-        }
-
-    def _validate_full_strand(self, sequence: str, global_params: Dict, validation_settings: Dict) -> Dict:
-        """Validate only the full strand against criteria"""
+        # Run cross-dimer analysis
         results = []
-        overall_pass = True
+        for i, strand1 in enumerate(target_strands):
+            for j, strand2 in enumerate(target_strands):
+                if i >= j:  # Avoid duplicates and self-interaction
+                    continue
 
-        # Calculate strand properties
-        props = self._calculate_full_strand_properties(sequence, global_params)
+                # Calculate cross-dimer ΔG
+                cross_dg = designer.calculate_cross_dimer_dg(
+                    strand1['sequence'],
+                    strand2['sequence'],
+                    settings.get('temp', 37)
+                )
 
-        # Get reaction temperature for melting temp validation
-        reaction_temp = global_params.get('reaction_temp', 37.0)
+                # Check if problematic (ΔG below threshold)
+                threshold = settings.get('cross_dimer_dg', -8.0)
+                problematic = cross_dg < threshold
 
-        # Get validation thresholds
-        melting_temp_settings = validation_settings.get('melting_temp',
-                                                        {'enabled': True, 'min_offset': 5, 'max_offset': 25})
-        hairpin_settings = validation_settings.get('hairpin', {'enabled': True, 'max_dg': -3.0})
-        self_dimer_settings = validation_settings.get('self_dimer', {'enabled': True, 'max_dg': -6.0})
-        gc_content_settings = validation_settings.get('gc_content',
-                                                      {'enabled': True, 'min_percent': 40, 'max_percent': 60})
+                # Generate reason message for problematic interactions
+                reason = ""
+                if problematic:
+                    reason = f"Cross-dimer ΔG ({cross_dg:.2f} kcal/mol) is below threshold ({threshold:.1f} kcal/mol)"
 
-        # Melting temperature validation
-        if melting_temp_settings.get('enabled'):
-            tm = props['melting_temp']
-            target_min = reaction_temp + melting_temp_settings.get('min_offset', 5)
-            target_max = reaction_temp + melting_temp_settings.get('max_offset', 25)
-            tm_pass = target_min <= tm <= target_max
-            overall_pass &= tm_pass
-            results.append({
-                'name': 'Melting Temperature',
-                'pass': tm_pass,
-                'message': f"Tm = {tm}°C (target: {target_min}-{target_max}°C)"
-            })
+                results.append({
+                    'strand1': strand1['name'],
+                    'strand2': strand2['name'],
+                    'dg': cross_dg,
+                    'problematic': problematic,
+                    'reason': reason
+                })
 
-        # Hairpin validation
-        if hairpin_settings.get('enabled'):
-            hairpin_dg = props['hairpin_dg']
-            max_dg = hairpin_settings.get('max_dg', -3.0)
-            hairpin_pass = hairpin_dg > max_dg
-            overall_pass &= hairpin_pass
-            results.append({
-                'name': 'Hairpin Formation',
-                'pass': hairpin_pass,
-                'message': f"ΔG = {hairpin_dg} kcal/mol (max: {max_dg})"
-            })
+        # Count problematic interactions
+        problematic_count = sum(1 for r in results if r['problematic'])
 
-        # Self-dimer validation
-        if self_dimer_settings.get('enabled'):
-            homodimer_dg = props['homodimer_dg']
-            max_dg = self_dimer_settings.get('max_dg', -6.0)
-            dimer_pass = homodimer_dg > max_dg
-            overall_pass &= dimer_pass
-            results.append({
-                'name': 'Self Dimerization',
-                'pass': dimer_pass,
-                'message': f"ΔG = {homodimer_dg} kcal/mol (max: {max_dg})"
-            })
+        return jsonify({
+            'type': 'cross-dimer',
+            'success': True,
+            'cross_dimer_results': results,
+            'message': f"Analyzed {len(results)} strand pairs. Found {problematic_count} problematic interactions."
+        })
 
-        # GC content validation
-        if gc_content_settings.get('enabled'):
-            gc_content = props['gc_content']
-            min_gc = gc_content_settings.get('min_percent', 40)
-            max_gc = gc_content_settings.get('max_percent', 60)
-            gc_pass = min_gc <= gc_content <= max_gc
-            overall_pass &= gc_pass
-            results.append({
-                'name': 'GC Content',
-                'pass': gc_pass,
-                'message': f"GC = {gc_content}% (target: {min_gc}-{max_gc}%)"
-            })
-
-        return {
-            'overall_pass': overall_pass,
-            'results': results
-        }
-
-
-# Initialize generator
-generator = StrandGenerator()
-
-
-@app.route('/api/generate-oligonucleotide', methods=['POST'])
-def generate_oligonucleotide():
-    """API endpoint for generating strands from frontend requests"""
-    request_data = request.get_json()
-    print(f"Received generation request: {request_data}")
-
-    result = generator.generate_strand_from_domains(request_data)
-    return jsonify(result)
-
-
-@app.route('/api/database-stats', methods=['GET'])
-def get_database_stats():
-    """Get statistics about available sequences in database"""
-    total_sequences = generator.redis_client.scard('oligo:all')
-
-    # Get length distribution
-    length_dist = {}
-    for key in generator.redis_client.scan_iter(match="oligo:length:*"):
-        length = int(key.split(':')[-1])
-        count = generator.redis_client.scard(key)
-        length_dist[length] = count
-
-    return jsonify({
-        'total_sequences': total_sequences,
-        'length_distribution': length_dist,
-        'available_lengths': sorted(length_dist.keys())
-    })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 if __name__ == '__main__':
-    print("Starting Strand Generator API...")
-    print("Frontend can now generate strands from Redis database")
-    print("API endpoints:")
-    print("  POST /api/generate-oligonucleotide - Generate strand from domain specs")
-    print("  GET  /api/database-stats - Get database statistics")
-    app.run(debug=True, host='localhost', port=5000)
+    app.run(debug=True, port=5000)
