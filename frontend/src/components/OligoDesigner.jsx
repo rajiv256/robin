@@ -1,775 +1,739 @@
-import React, {useState} from 'react';
+// OligoDesigner.jsx
+import React, {useState, useEffect} from 'react';
 import './OligoDesigner.css';
 
-
-// Real API function that connects to Redis database
-const generateStrand = async (requestData) => {
-    try {
-        const response = await fetch('http://localhost:5000/api/generate-oligonucleotide', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestData)
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-
-        if (!result.success) {
-            throw new Error(result.error || 'Generation failed');
-        }
-
-        return result;
-    } catch (error) {
-        console.error('API Error:', error);
-        throw error;
-    }
-};
-
 const OligoDesigner = () => {
-    // Strand library - stores all saved strands
-    const [strandLibrary, setStrandLibrary] = useState([]);
+    const [activeTab, setActiveTab] = useState('domains');
+    const [domains, setDomains] = useState([]);
+    const [strands, setStrands] = useState([]);
+    const [selectedStrands, setSelectedStrands] = useState([]);
+    const [results, setResults] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
-    // Current strand being designed
-    const [currentStrand, setCurrentStrand] = useState({
-        id: null,
-        name: 'Strand 1',
-        domains: [],
-        result: null
+    // Domain cache - stores name and length pairs
+    const [domainCache, setDomainCache] = useState(new Map());
+
+    const [domainName, setDomainName] = useState('');
+    const [domainLength, setDomainLength] = useState('20');
+    const [strandName, setStrandName] = useState('');
+    const [strandDomains, setStrandDomains] = useState('');
+
+    const [settings, setSettings] = useState({
+        temp: 37,
+        gc_min: 30,
+        gc_max: 70,
+        tm_min: 40,
+        tm_max: 80,
+        hairpin_dg: -2.0,
+        self_dimer_dg: -5.0,
+        cross_dimer_dg: -8.0
     });
 
-    // Current domain being added
-    const [currentDomain, setCurrentDomain] = useState({
-        name: '',
-        length: 20
-    });
+    const API_BASE = 'http://localhost:5000/api';
 
-    // UI state
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [error, setError] = useState(null);
-    const [saveMessage, setSaveMessage] = useState(null);
-    const [activeTab, setActiveTab] = useState('design'); // 'design' or 'library'
+    useEffect(() => {
+        loadData();
+    }, []);
 
-    // Global parameters
-    const [globalParams, setGlobalParams] = useState({
-        reaction_temp: 37,
-        salt_conc: 50,
-        mg_conc: 2,
-        oligo_conc: 250
-    });
+    const loadData = async () => {
+        try {
+            const domainsResponse = await fetch(`${API_BASE}/domains`);
+            const strandsResponse = await fetch(`${API_BASE}/strands`);
+            const cacheResponse = await fetch(`${API_BASE}/domain-cache`);
 
-    // Advanced validation settings
-    const [validationSettings, setValidationSettings] = useState({
-        melting_temp: {
-            enabled: true,
-            min_offset: 5,
-            max_offset: 25
-        },
-        hairpin: {
-            enabled: true,
-            max_dg: -3.0
-        },
-        self_dimer: {
-            enabled: true,
-            max_dg: -6.0
-        },
-        cross_dimer: {
-            enabled: true,
-            max_dg: -6.0
-        },
-        gc_content: {
-            enabled: true,
-            min_percent: 40,
-            max_percent: 60
-        },
-        primer_3_end: {
-            enabled: false,
-            max_dg: -3.0
-        },
-        repeats: {
-            enabled: false,
-            max_length: 4
-        },
-        secondary_structure: {
-            enabled: false,
-            max_dg: -2.0
-        }
-    });
+            if (!domainsResponse.ok || !strandsResponse.ok || !cacheResponse.ok) {
+                throw new Error('Server not responding');
+            }
 
-    const [showAdvanced, setShowAdvanced] = useState(false);
+            const domainsData = await domainsResponse.json();
+            const strandsData = await strandsResponse.json();
+            const cacheData = await cacheResponse.json();
 
-    // Add domain to current strand
-    const addDomain = () => {
-        if (currentDomain.name) {
-            setCurrentStrand(prev => ({
-                ...prev,
-                domains: [...prev.domains, {
-                    id: Date.now(),
-                    name: currentDomain.name,
-                    length: currentDomain.length,
-                    fixed_sequence: null,
-                    target_gc_content: 50
-                }]
-            }));
-            setCurrentDomain({name: '', length: 20});
+            setDomains(domainsData);
+            setStrands(strandsData);
+
+            // Convert cache array to Map
+            const cacheMap = new Map();
+            cacheData.forEach(item => {
+                cacheMap.set(item.name, item.length);
+            });
+            setDomainCache(cacheMap);
+            setError(''); // Clear any previous errors
+        } catch (err) {
+            console.log('Server not available, starting with empty state');
+            // Start completely empty - no mock data
+            setDomains([]);
+            setStrands([]);
+            setDomainCache(new Map());
+            setError('Server not available. Please start the Flask backend.');
         }
     };
 
-    // Remove domain from current strand
-    const removeDomain = (id) => {
-        setCurrentStrand(prev => ({
-            ...prev,
-            domains: prev.domains.filter(d => d.id !== id)
-        }));
-    };
-
-    // Save current strand to library
-    const saveStrand = () => {
-        if (currentStrand.domains.length === 0) {
-            setSaveMessage({type: 'error', text: 'Please add at least one domain before saving'});
-            setTimeout(() => setSaveMessage(null), 3000);
+    const addDomain = async () => {
+        if (!domainName.trim()) {
+            setError('Domain name is required');
             return;
         }
 
-        const strandToSave = {
-            ...currentStrand,
-            id: currentStrand.id || Date.now(),
-            savedAt: new Date().toLocaleString()
-        };
+        const baseName = domainName.trim().replace('*', '');
+        const length = parseInt(domainLength);
 
-        if (currentStrand.id) {
-            // Update existing strand
-            setStrandLibrary(prev =>
-                prev.map(s => s.id === currentStrand.id ? strandToSave : s)
-            );
-            setSaveMessage({type: 'success', text: 'Strand updated successfully!'});
-        } else {
-            // Add new strand
-            setStrandLibrary(prev => [...prev, strandToSave]);
-            setSaveMessage({type: 'success', text: 'Strand saved to library!'});
-        }
-
-        // Clear message after 3 seconds
-        setTimeout(() => setSaveMessage(null), 3000);
-
-        // Reset current strand for new design
-        const nextStrandNumber = strandLibrary.length + 2;
-        setCurrentStrand({
-            id: null,
-            name: `Strand ${nextStrandNumber}`,
-            domains: [],
-            result: null
-        });
-    };
-
-    // Load strand from library for editing
-    const loadStrand = (strand) => {
-        setCurrentStrand({
-            ...strand,
-            result: null // Clear previous results when editing
-        });
-        setActiveTab('design');
-    };
-
-    // Delete strand from library
-    const deleteStrand = (strandId) => {
-        if (window.confirm('Are you sure you want to delete this strand?')) {
-            setStrandLibrary(prev => prev.filter(s => s.id !== strandId));
-        }
-    };
-
-    // Duplicate strand in library
-    const duplicateStrand = (strand) => {
-        const duplicated = {
-            ...strand,
-            id: Date.now(),
-            name: `${strand.name} (Copy)`,
-            result: null,
-            savedAt: new Date().toLocaleString()
-        };
-        setStrandLibrary(prev => [...prev, duplicated]);
-    };
-
-    // Generate oligonucleotide
-    const generateOligo = async () => {
-        if (currentStrand.domains.length === 0) {
-            alert('Please add at least one domain');
+        if (!length || length < 1 || length > 100) {
+            setError('Domain length must be between 1 and 100');
             return;
         }
 
-        setIsGenerating(true);
-        setError(null);
+        // Check if domain is already in cache
+        if (domainCache.has(baseName)) {
+            setError(`Domain "${baseName}" already exists in cache with length ${domainCache.get(baseName)}`);
+            return;
+        }
+
+        setError('');
 
         try {
-            const requestData = {
-                strand_name: currentStrand.name,
-                domains: currentStrand.domains,
-                global_params: globalParams,
-                validation_settings: validationSettings
-            };
+            const response = await fetch(`${API_BASE}/domains`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    name: baseName,
+                    length: length
+                })
+            });
 
-            console.log('Sending request:', requestData);
-            const response = await generateStrand(requestData);
-            console.log('Got response:', response);
-
-            setCurrentStrand(prev => ({...prev, result: response}));
-
+            if (response.ok) {
+                // Update domain cache
+                setDomainCache(prev => new Map(prev.set(baseName, length)));
+                setDomainName('');
+                setDomainLength('20');
+                loadData();
+            } else {
+                const result = await response.json();
+                setError(result.error || 'Failed to add domain');
+            }
         } catch (err) {
-            console.error('Generation failed:', err);
-            setError(`Failed to generate: ${err.message}`);
+            setError('Network error: Unable to connect to server');
+        }
+    };
+
+    const addStrand = async () => {
+        if (!strandName.trim() || !strandDomains.trim()) {
+            setError('Strand name and domains are required');
+            return;
         }
 
-        setIsGenerating(false);
+        const domainList = strandDomains.split(',').map(d => d.trim()).filter(d => d);
+
+        // Validate that all domains exist in cache
+        const invalidDomains = [];
+        domainList.forEach(domainName => {
+            const baseName = domainName.replace('*', '');
+            if (!domainCache.has(baseName)) {
+                invalidDomains.push(baseName);
+            }
+        });
+
+        if (invalidDomains.length > 0) {
+            setError(`Unknown domains: ${invalidDomains.join(', ')}. Add them to the domain cache first.`);
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE}/strands`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    name: strandName.trim(),
+                    domains: domainList
+                })
+            });
+
+            if (response.ok) {
+                setStrandName('');
+                setStrandDomains('');
+                setError('');
+                loadData();
+            } else {
+                const result = await response.json();
+                setError(result.error || 'Failed to add strand');
+            }
+        } catch (err) {
+            setError('Failed to add strand');
+        }
     };
+
+    const generateStrands = async () => {
+        if (selectedStrands.length === 0) {
+            setError('Select at least one strand to generate');
+            return;
+        }
+
+        setLoading(true);
+        setError('');
+
+        try {
+            const response = await fetch(`${API_BASE}/generate-strands`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    settings,
+                    strand_ids: selectedStrands
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                setResults(result);
+                loadData();
+            } else {
+                setError(result.error || 'Generation failed');
+            }
+        } catch (err) {
+            setError('Failed to generate strands');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const checkCrossDimers = async () => {
+        if (selectedStrands.length < 2) {
+            setError('Select at least 2 strands to check cross-dimers');
+            return;
+        }
+
+        setLoading(true);
+        setError('');
+
+        try {
+            const response = await fetch(`${API_BASE}/check-cross-dimers`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    settings,
+                    strand_ids: selectedStrands
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                setResults(result);
+            } else {
+                setError(result.error || 'Cross-dimer check failed');
+            }
+        } catch (err) {
+            setError('Failed to check cross-dimers');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const deleteItem = async (type, id) => {
+        try {
+            const response = await fetch(`${API_BASE}/${type}/${id}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                loadData();
+            } else {
+                setError(`Failed to delete ${type}`);
+            }
+        } catch (err) {
+            setError(`Failed to delete ${type}`);
+        }
+    };
+
+    const removeDomainFromCache = async (domainName) => {
+        try {
+            const response = await fetch(`${API_BASE}/domain-cache/${domainName}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                setDomainCache(prev => {
+                    const newCache = new Map(prev);
+                    newCache.delete(domainName);
+                    return newCache;
+                });
+                loadData(); // Reload to remove any actual domain instances
+            } else {
+                setError('Failed to remove domain from cache');
+            }
+        } catch (err) {
+            setError('Failed to remove domain from cache');
+        }
+    };
+
+    const toggleStrandSelection = (id) => {
+        setSelectedStrands(prev =>
+            prev.includes(id)
+                ? prev.filter(item => item !== id)
+                : [...prev, id]
+        );
+    };
+
+    // Check if the current domain name exists in cache
+    const isExistingDomain = domainCache.has(domainName.trim().replace('*', ''));
+    const existingDomainLength = isExistingDomain ? domainCache.get(domainName.trim().replace('*', '')) : null;
 
     return (
         <div className="oligo-designer">
-            <h1>🧬 Multi-Strand Oligonucleotide Designer</h1>
+            <h1 className="header">OligoDesigner - Strand Design System</h1>
+
+            {error && (
+                <div className="error">
+                    {error}
+                </div>
+            )}
+
+            {/* Domain Cache Display */}
+            {domainCache.size > 0 && (
+                <div className="domain-cache">
+                    <h3 className="domain-cache-title">Domain Cache
+                        ({domainCache.size * 2} domains: {domainCache.size} base + {domainCache.size} complements)</h3>
+                    <div className="domain-cache-list">
+                        {Array.from(domainCache.entries()).map(([name, length]) => (
+                            <React.Fragment key={name}>
+                                <div className="cached-domain">
+                                    {name} ({length}nt)
+                                    <button
+                                        onClick={() => removeDomainFromCache(name)}
+                                        style={{
+                                            marginLeft: '8px',
+                                            background: 'none',
+                                            border: 'none',
+                                            color: '#dc2626',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                                <div className="cached-domain">
+                                    {name}* ({length}nt)
+                                    <span style={{marginLeft: '8px', fontSize: '0.75rem', color: '#6b7280'}}>
+                                        complement
+                                    </span>
+                                </div>
+                            </React.Fragment>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Settings Panel */}
+            <div className="settings-panel">
+                <div className="settings-header">
+                    <h3>Generation Settings</h3>
+                </div>
+
+                <div className="settings-grid">
+                    <div className="form-group">
+                        <label className="form-label">Temperature (°C)</label>
+                        <input
+                            type="number"
+                            className="form-input"
+                            value={settings.temp}
+                            onChange={(e) => setSettings(prev => ({...prev, temp: parseInt(e.target.value)}))}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Min GC (%)</label>
+                        <input
+                            type="number"
+                            className="form-input"
+                            value={settings.gc_min}
+                            onChange={(e) => setSettings(prev => ({...prev, gc_min: parseInt(e.target.value)}))}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Max GC (%)</label>
+                        <input
+                            type="number"
+                            className="form-input"
+                            value={settings.gc_max}
+                            onChange={(e) => setSettings(prev => ({...prev, gc_max: parseInt(e.target.value)}))}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Min Tm (°C)</label>
+                        <input
+                            type="number"
+                            className="form-input"
+                            value={settings.tm_min}
+                            onChange={(e) => setSettings(prev => ({...prev, tm_min: parseInt(e.target.value)}))}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Max Tm (°C)</label>
+                        <input
+                            type="number"
+                            className="form-input"
+                            value={settings.tm_max}
+                            onChange={(e) => setSettings(prev => ({...prev, tm_max: parseInt(e.target.value)}))}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Cross-dimer ΔG</label>
+                        <input
+                            type="number"
+                            step="0.1"
+                            className="form-input"
+                            value={settings.cross_dimer_dg}
+                            onChange={(e) => setSettings(prev => ({
+                                ...prev,
+                                cross_dimer_dg: parseFloat(e.target.value)
+                            }))}
+                        />
+                    </div>
+                </div>
+            </div>
 
             {/* Tabs */}
             <div className="tabs">
-                <button
-                    className={`tab-button ${activeTab === 'design' ? 'active' : 'inactive'}`}
-                    onClick={() => setActiveTab('design')}
-                >
-                    Design ({currentStrand.domains.length} domains)
-                </button>
-                <button
-                    className={`tab-button ${activeTab === 'library' ? 'active' : 'inactive'}`}
-                    onClick={() => setActiveTab('library')}
-                >
-                    Library ({strandLibrary.length} strands)
-                </button>
+                <div className="tabs-nav">
+                    {['domains', 'strands'].map(tab => (
+                        <button
+                            key={tab}
+                            className={`tab-button ${activeTab === tab ? 'active' : 'inactive'}`}
+                            onClick={() => setActiveTab(tab)}
+                        >
+                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                        </button>
+                    ))}
+                </div>
             </div>
 
-            {/* Design Tab */}
-            {activeTab === 'design' && (
+            {/* Domains Tab */}
+            {activeTab === 'domains' && (
                 <div className="tab-content">
-                    {/* Strand Name */}
-                    <div className="form-group">
-                        <label className="form-label">Strand Name:</label>
-                        <input
-                            type="text"
-                            className="form-input strand-name"
-                            value={currentStrand.name}
-                            onChange={(e) => setCurrentStrand(prev => ({...prev, name: e.target.value}))}
-                        />
-                    </div>
-
-                    {/* Current Domains */}
-                    {currentStrand.domains.length > 0 && (
-                        <div className="domain-status">
-                            <h3>Current Strand (5′ → 3′)</h3>
-                            <div className="domain-list">
-                                {currentStrand.domains.map((domain, index) => (
-                                    <React.Fragment key={domain.id}>
-                                        <div className="domain-badge">
-                                            <div className="domain-name">{domain.name}</div>
-                                            <div className="domain-length">{domain.length}bp</div>
-                                            <button
-                                                onClick={() => removeDomain(domain.id)}
-                                                className="domain-remove"
-                                            >
-                                                ×
-                                            </button>
-                                        </div>
-                                        {index < currentStrand.domains.length - 1 &&
-                                            <span className="domain-arrow">→</span>
-                                        }
-                                    </React.Fragment>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Settings Panel */}
-                    <div className="settings-panel">
-                        <div className="settings-header">
-                            <h3>Reaction Conditions</h3>
-                            <button
-                                onClick={() => setShowAdvanced(!showAdvanced)}
-                                className="advanced-toggle"
-                            >
-                                {showAdvanced ? '🔼 Hide Advanced' : '🔽 Show Advanced'}
-                            </button>
-                        </div>
-
-                        {/* Basic Settings */}
-                        <div className="basic-settings">
-                            <div>
-                                <label className="form-label">Reaction Temperature (°C):</label>
-                                <input
-                                    type="number"
-                                    className="form-input"
-                                    value={globalParams.reaction_temp}
-                                    onChange={(e) => setGlobalParams(prev => ({
-                                        ...prev,
-                                        reaction_temp: Number(e.target.value)
-                                    }))}
-                                />
-                            </div>
-                            <div className="temp-target">
-                                🌡️ Target Tm: {globalParams.reaction_temp + validationSettings.melting_temp.min_offset}°C
-                                - {globalParams.reaction_temp + validationSettings.melting_temp.max_offset}°C
-                            </div>
-                        </div>
-
-                        {/* Advanced Settings */}
-                        {showAdvanced && (
-                            <div className="advanced-settings">
-                                <div className="advanced-section">
-                                    <h4>Advanced Reaction Parameters</h4>
-                                    <div className="advanced-grid">
-                                        <div>
-                                            <label className="form-label">Salt (mM):</label>
-                                            <input
-                                                type="number"
-                                                className="advanced-input"
-                                                value={globalParams.salt_conc}
-                                                onChange={(e) => setGlobalParams(prev => ({
-                                                    ...prev,
-                                                    salt_conc: Number(e.target.value)
-                                                }))}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="form-label">Mg²⁺ (mM):</label>
-                                            <input
-                                                type="number"
-                                                step="0.1"
-                                                className="advanced-input"
-                                                value={globalParams.mg_conc}
-                                                onChange={(e) => setGlobalParams(prev => ({
-                                                    ...prev,
-                                                    mg_conc: Number(e.target.value)
-                                                }))}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="form-label">Oligo (nM):</label>
-                                            <input
-                                                type="number"
-                                                className="advanced-input"
-                                                value={globalParams.oligo_conc}
-                                                onChange={(e) => setGlobalParams(prev => ({
-                                                    ...prev,
-                                                    oligo_conc: Number(e.target.value)
-                                                }))}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="advanced-section">
-                                    <h4>Validation Thresholds</h4>
-
-                                    {/* Melting Temperature Settings */}
-                                    <div className="validation-group">
-                                        <div className="validation-header">
-                                            <input
-                                                type="checkbox"
-                                                checked={validationSettings.melting_temp.enabled}
-                                                onChange={(e) => setValidationSettings(prev => ({
-                                                    ...prev,
-                                                    melting_temp: {...prev.melting_temp, enabled: e.target.checked}
-                                                }))}
-                                            />
-                                            <label>Melting Temperature Range</label>
-                                        </div>
-                                        {validationSettings.melting_temp.enabled && (
-                                            <div className="validation-controls">
-                                                <span>Offset:</span>
-                                                <input
-                                                    type="number"
-                                                    className="validation-input"
-                                                    placeholder="Min"
-                                                    value={validationSettings.melting_temp.min_offset}
-                                                    onChange={(e) => setValidationSettings(prev => ({
-                                                        ...prev,
-                                                        melting_temp: {
-                                                            ...prev.melting_temp,
-                                                            min_offset: Number(e.target.value)
-                                                        }
-                                                    }))}
-                                                />
-                                                <span>to</span>
-                                                <input
-                                                    type="number"
-                                                    className="validation-input"
-                                                    placeholder="Max"
-                                                    value={validationSettings.melting_temp.max_offset}
-                                                    onChange={(e) => setValidationSettings(prev => ({
-                                                        ...prev,
-                                                        melting_temp: {
-                                                            ...prev.melting_temp,
-                                                            max_offset: Number(e.target.value)
-                                                        }
-                                                    }))}
-                                                />
-                                                <span>°C above reaction temp</span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Hairpin Settings */}
-                                    <div className="validation-group">
-                                        <div className="validation-header">
-                                            <input
-                                                type="checkbox"
-                                                checked={validationSettings.hairpin.enabled}
-                                                onChange={(e) => setValidationSettings(prev => ({
-                                                    ...prev,
-                                                    hairpin: {...prev.hairpin, enabled: e.target.checked}
-                                                }))}
-                                            />
-                                            <label>Hairpin Formation</label>
-                                        </div>
-                                        {validationSettings.hairpin.enabled && (
-                                            <div className="validation-controls">
-                                                <span>Max ΔG:</span>
-                                                <input
-                                                    type="number"
-                                                    step="0.1"
-                                                    className="validation-input dg-input"
-                                                    value={validationSettings.hairpin.max_dg}
-                                                    onChange={(e) => setValidationSettings(prev => ({
-                                                        ...prev,
-                                                        hairpin: {...prev.hairpin, max_dg: Number(e.target.value)}
-                                                    }))}
-                                                />
-                                                <span>kcal/mol</span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Self Dimerization Settings */}
-                                    <div className="validation-group">
-                                        <div className="validation-header">
-                                            <input
-                                                type="checkbox"
-                                                checked={validationSettings.self_dimer.enabled}
-                                                onChange={(e) => setValidationSettings(prev => ({
-                                                    ...prev,
-                                                    self_dimer: {...prev.self_dimer, enabled: e.target.checked}
-                                                }))}
-                                            />
-                                            <label>Self Dimerization</label>
-                                        </div>
-                                        {validationSettings.self_dimer.enabled && (
-                                            <div className="validation-controls">
-                                                <span>Max ΔG:</span>
-                                                <input
-                                                    type="number"
-                                                    step="0.1"
-                                                    className="validation-input dg-input"
-                                                    value={validationSettings.self_dimer.max_dg}
-                                                    onChange={(e) => setValidationSettings(prev => ({
-                                                        ...prev,
-                                                        self_dimer: {...prev.self_dimer, max_dg: Number(e.target.value)}
-                                                    }))}
-                                                />
-                                                <span>kcal/mol</span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Cross Dimerization Settings */}
-                                    <div className="validation-group">
-                                        <div className="validation-header">
-                                            <input
-                                                type="checkbox"
-                                                checked={validationSettings.cross_dimer.enabled}
-                                                onChange={(e) => setValidationSettings(prev => ({
-                                                    ...prev,
-                                                    cross_dimer: {...prev.cross_dimer, enabled: e.target.checked}
-                                                }))}
-                                            />
-                                            <label>Cross Dimerization</label>
-                                        </div>
-                                        {validationSettings.cross_dimer.enabled && (
-                                            <div className="validation-controls">
-                                                <span>Max ΔG:</span>
-                                                <input
-                                                    type="number"
-                                                    step="0.1"
-                                                    className="validation-input dg-input"
-                                                    value={validationSettings.cross_dimer.max_dg}
-                                                    onChange={(e) => setValidationSettings(prev => ({
-                                                        ...prev,
-                                                        cross_dimer: {
-                                                            ...prev.cross_dimer,
-                                                            max_dg: Number(e.target.value)
-                                                        }
-                                                    }))}
-                                                />
-                                                <span>kcal/mol</span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* GC Content Settings */}
-                                    <div className="validation-group">
-                                        <div className="validation-header">
-                                            <input
-                                                type="checkbox"
-                                                checked={validationSettings.gc_content.enabled}
-                                                onChange={(e) => setValidationSettings(prev => ({
-                                                    ...prev,
-                                                    gc_content: {...prev.gc_content, enabled: e.target.checked}
-                                                }))}
-                                            />
-                                            <label>GC Content Range</label>
-                                        </div>
-                                        {validationSettings.gc_content.enabled && (
-                                            <div className="validation-controls">
-                                                <input
-                                                    type="number"
-                                                    className="validation-input"
-                                                    placeholder="Min"
-                                                    value={validationSettings.gc_content.min_percent}
-                                                    onChange={(e) => setValidationSettings(prev => ({
-                                                        ...prev,
-                                                        gc_content: {
-                                                            ...prev.gc_content,
-                                                            min_percent: Number(e.target.value)
-                                                        }
-                                                    }))}
-                                                />
-                                                <span>to</span>
-                                                <input
-                                                    type="number"
-                                                    className="validation-input"
-                                                    placeholder="Max"
-                                                    value={validationSettings.gc_content.max_percent}
-                                                    onChange={(e) => setValidationSettings(prev => ({
-                                                        ...prev,
-                                                        gc_content: {
-                                                            ...prev.gc_content,
-                                                            max_percent: Number(e.target.value)
-                                                        }
-                                                    }))}
-                                                />
-                                                <span>%</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Add Domain Section */}
-                    <div className="add-domain">
-                        <h3>Add Domain</h3>
-                        <div className="domain-inputs">
-                            <div>
-                                <label className="form-label">Name:</label>
+                    <div className="add-form">
+                        <h3 className="add-form-title">Add Domain to Cache</h3>
+                        <div className="add-form-grid">
+                            <div className="form-group">
+                                <label className="form-label">Domain Name</label>
                                 <input
                                     type="text"
                                     className="form-input"
-                                    value={currentDomain.name}
-                                    onChange={(e) => setCurrentDomain(prev => ({...prev, name: e.target.value}))}
-                                    placeholder="e.g., Primer, Spacer"
+                                    value={domainName}
+                                    onChange={(e) => setDomainName(e.target.value)}
+                                    placeholder="e.g., a, b, c"
                                 />
+                                {isExistingDomain && (
+                                    <div className="add-form-note" style={{color: '#059669'}}>
+                                        Domain exists in cache with length {existingDomainLength}nt
+                                    </div>
+                                )}
                             </div>
-                            <div>
-                                <label className="form-label">Length (bp):</label>
+                            <div className="form-group">
+                                <label className="form-label">Length (nt)</label>
                                 <input
                                     type="number"
-                                    className="form-input domain-length"
-                                    value={currentDomain.length}
-                                    onChange={(e) => setCurrentDomain(prev => ({
-                                        ...prev,
-                                        length: Number(e.target.value)
-                                    }))}
+                                    className="form-input"
+                                    value={isExistingDomain ? existingDomainLength : domainLength}
+                                    onChange={(e) => setDomainLength(e.target.value)}
+                                    min="10"
+                                    max="50"
+                                    disabled={isExistingDomain}
                                 />
                             </div>
                             <button
-                                onClick={addDomain}
-                                disabled={!currentDomain.name}
                                 className="btn btn-primary"
+                                onClick={addDomain}
+                                disabled={isExistingDomain}
                             >
-                                + Add Domain
+                                {isExistingDomain ? 'Already in Cache' : 'Add to Cache'}
                             </button>
                         </div>
+                        <div className="add-form-note">
+                            Domains are added to cache first. Use "Generate Domain Sequences" to create sequences for
+                            all cached domains.
+                            Individual domains are not validated - only complete strand sequences are validated.
+                        </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="action-buttons">
-                        <button
-                            onClick={generateOligo}
-                            disabled={isGenerating || currentStrand.domains.length === 0}
-                            className="btn btn-success"
-                        >
-                            {isGenerating ? '🔄 Generating...' : '▶ Generate & Validate'}
-                        </button>
+                    {/*<div className="library-header">*/}
+                    {/*    <h2 className="library-title">Domain Instances</h2>*/}
+                    {/*    <span className="library-count">{domains.length} instances</span>*/}
+                    {/*</div>*/}
 
-                        <button
-                            onClick={saveStrand}
-                            disabled={currentStrand.domains.length === 0}
-                            className="btn btn-secondary"
-                        >
-                            💾 Save to Library
-                        </button>
-                    </div>
-
-                    {/* Save Message Display */}
-                    {saveMessage && (
-                        <div className={`error ${saveMessage.type === 'success' ? 'success-message' : ''}`}>
-                            {saveMessage.text}
+                    {domains.length === 0 ? (
+                        <div className="library-empty">
+                            <div className="library-empty-icon">🧬</div>
+                            <p>No domain instances created yet</p>
+                            <p>Add domains to cache and generate strands to create instances</p>
                         </div>
-                    )}
-
-                    {/* Error Display */}
-                    {error && (
-                        <div className="error">
-                            <strong>Error:</strong> {error}
-                        </div>
-                    )}
-
-                    {/* Results */}
-                    {currentStrand.result && currentStrand.result.success && (
-                        <div className="results">
-                            <h2>Results: {currentStrand.result.strand.name}</h2>
-
-                            <div
-                                className={`status-badge ${currentStrand.result.validation.overall_pass ? 'status-success' : 'status-fail'}`}>
-                                {currentStrand.result.validation.overall_pass ? '✅ All Checks Passed' : '❌ Some Checks Failed'}
-                            </div>
-
-                            <div className="result-stats">
-                                <strong>Length:</strong> {currentStrand.result.strand.total_length} bp |
-                                <strong> Time:</strong> {currentStrand.result.generation_time.toFixed(2)}s
-                            </div>
-
-                            <div className="sequence-display">
-                                <strong>Final Sequence (5′ → 3′):</strong>
-                                <div className="sequence-box">
-                                    {currentStrand.result.strand.sequence}
-                                </div>
-                            </div>
-
-                            {/* Domain Breakdown */}
-                            {currentStrand.result.domains && (
-                                <div className="domain-breakdown">
-                                    <h3>Domain Breakdown</h3>
-                                    <div className="domain-results">
-                                        {currentStrand.result.domains.map((domain, index) => (
-                                            <div key={index} className="domain-result">
-                                                <div className="domain-result-header">
-                                                    <span className="domain-result-name">{domain.name}</span>
-                                                    <div className="domain-result-info">
-                                                        <span className="domain-result-length">{domain.length}bp</span>
-                                                    </div>
-                                                </div>
-                                                <div className="domain-sequence">{domain.sequence}</div>
-                                            </div>
-                                        ))}
+                    ) : (
+                        <div className="library-list">
+                            {domains.map(domain => (
+                                <div key={domain.id} className="library-item">
+                                    <div className="library-item-header">
+                                        <div className="library-item-info">
+                                            <h4>
+                                                {domain.name}
+                                                {domain.name.endsWith('*') && (
+                                                    <span className="complement-badge">(complement)</span>
+                                                )}
+                                            </h4>
+                                            <p className="library-item-meta">Length: {domain.length}nt</p>
+                                        </div>
+                                        <div className="library-actions">
+                                            <button
+                                                className="btn btn-danger"
+                                                onClick={() => deleteItem('domains', domain.id)}
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
                                     </div>
-
+                                    {domain.sequence && (
+                                        <div className="library-sequence">
+                                            <strong>Sequence:</strong>
+                                            <div className="sequence-box">{domain.sequence}</div>
+                                        </div>
+                                    )}
+                                    {domain.sequence && (
+                                        <div className="library-result">
+                                            <span className="status-badge status-valid">
+                                                Generated
+                                            </span>
+                                            <span className="result-meta">
+                                                Length: {domain.sequence.length}nt
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-
-                            {/* Validation Results */}
-                            <div className="validation-results">
-                                {currentStrand.result.validation.results.map((result, index) => (
-                                    <div key={index} className={`validation-result ${result.pass ? 'pass' : 'fail'}`}>
-                                        <div className="validation-result-header">{result.name}</div>
-                                        <div className="validation-result-message">{result.message}</div>
-                                    </div>
-                                ))}
-                            </div>
+                            ))}
                         </div>
                     )}
                 </div>
             )}
 
-            {/* Library Tab */}
-            {activeTab === 'library' && (
+            {/* Strands Tab */}
+            {activeTab === 'strands' && (
                 <div className="tab-content">
-                    {strandLibrary.length === 0 ? (
+                    <div className="add-form">
+                        <h3 className="add-form-title">Add Strand</h3>
+                        <div className="add-form-grid add-form-grid-strands">
+                            <div className="form-group">
+                                <label className="form-label">Strand Name</label>
+                                <input
+                                    type="text"
+                                    className="form-input"
+                                    value={strandName}
+                                    onChange={(e) => setStrandName(e.target.value)}
+                                    placeholder="e.g., S1, Reporter"
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="form-label">Domains (comma-separated)</label>
+                                <input
+                                    type="text"
+                                    className="form-input"
+                                    value={strandDomains}
+                                    onChange={(e) => setStrandDomains(e.target.value)}
+                                    placeholder="e.g., a, b*, c"
+                                />
+                            </div>
+                            <button
+                                className="btn btn-primary"
+                                onClick={addStrand}
+                            >
+                                Add Strand
+                            </button>
+                        </div>
+                        <div className="add-form-note">
+                            Use * to indicate complement domains (e.g., a*). All domains must exist in cache.
+                        </div>
+                    </div>
+
+                    <div className="library-header">
+                        <h2 className="library-title">Strand Library</h2>
+                        <span className="library-count">{strands.length} strands</span>
+                    </div>
+
+                    {strands.length === 0 ? (
                         <div className="library-empty">
-                            <div className="library-empty-icon">📚</div>
-                            <p>No strands saved yet. Design and save strands to build your library!</p>
+                            <div className="library-empty-icon">🧬</div>
+                            <p>No strands defined yet</p>
                         </div>
                     ) : (
-                        <>
-                            <div className="library-header">
-                                <h2>Strand Library</h2>
-                                <span className="library-count">{strandLibrary.length} saved strands</span>
-                            </div>
-
-                            <div className="library-list">
-                                {strandLibrary.map((strand) => (
-                                    <div key={strand.id} className="library-item">
-                                        <div className="library-item-header">
-                                            <div className="library-item-info">
+                        <div className="library-list">
+                            {strands.map(strand => (
+                                <div key={strand.id} className="library-item">
+                                    <div className="library-item-header">
+                                        <div className="library-item-info">
+                                            <div className="library-item-name">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedStrands.includes(strand.id)}
+                                                    onChange={() => toggleStrandSelection(strand.id)}
+                                                    className="library-item-checkbox"
+                                                />
                                                 <h4>{strand.name}</h4>
-                                                <p className="library-item-meta">Saved: {strand.savedAt}</p>
                                             </div>
-                                            <div className="library-actions">
-                                                <button
-                                                    onClick={() => loadStrand(strand)}
-                                                    className="library-action edit"
-                                                >
-                                                    Edit
-                                                </button>
-                                                <button
-                                                    onClick={() => duplicateStrand(strand)}
-                                                    className="library-action copy"
-                                                >
-                                                    Copy
-                                                </button>
-                                                <button
-                                                    onClick={() => deleteStrand(strand.id)}
-                                                    className="library-action delete"
-                                                >
-                                                    Delete
-                                                </button>
+                                            <p className="library-item-meta">
+                                                Domains: {strand.domains ? strand.domains.join(' → ') : 'No domains'}
+                                            </p>
+                                        </div>
+                                        <div className="library-actions">
+                                            <button
+                                                className="btn btn-danger"
+                                                onClick={() => deleteItem('strands', strand.id)}
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="library-domains">
+                                        {strand.domains && strand.domains.map((domain, idx) => (
+                                            <span key={idx} className="domain-tag">{domain}</span>
+                                        ))}
+                                    </div>
+                                    {strand.sequence && (
+                                        <div className="library-sequence">
+                                            <strong>Sequence:</strong>
+                                            <div className="sequence-box">{strand.sequence}</div>
+                                        </div>
+                                    )}
+                                    {strand.validation_results && strand.validation_results.overall_valid !== undefined && (
+                                        <div className="library-result">
+                                            <span className={`status-badge ${
+                                                strand.validation_results.overall_valid ? 'status-valid' : 'status-invalid'
+                                            }`}>
+                                                {strand.validation_results.overall_valid ? 'Valid' : 'Invalid'}
+                                            </span>
+                                            <span className="result-meta">
+                                                Length: {strand.sequence ? strand.sequence.length : 0}nt
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {strands.length > 0 && (
+                        <div className="action-buttons">
+                            <button
+                                className="btn btn-success"
+                                onClick={generateStrands}
+                                disabled={loading || selectedStrands.length === 0}
+                            >
+                                {loading ? 'Building...' : `Build Strands (${selectedStrands.length})`}
+                            </button>
+                            <button
+                                className="btn btn-primary"
+                                onClick={checkCrossDimers}
+                                disabled={loading || selectedStrands.length < 2}
+                            >
+                                {loading ? 'Checking...' : 'Check Cross-Dimers'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Results Section */}
+            {results && (
+                <div className="results">
+                    <h2 className="results-title">
+                        {results.type === 'cross-dimer' ? 'Cross-Dimer Analysis' : 'Strand Generation Results'}
+                    </h2>
+
+                    <div className={`results-status ${results.success ? 'success' : 'fail'}`}>
+                        {results.success ? 'Analysis Complete' : 'Analysis Failed'}
+                    </div>
+
+                    {results.message && (
+                        <div className="results-message">
+                            <strong>Status:</strong> {results.message}
+                        </div>
+                    )}
+
+                    {results.cross_dimer_results && (
+                        <div className="results-section">
+                            <h3 className="results-section-title">Cross-Dimer Interactions</h3>
+                            <div className="results-list">
+                                {results.cross_dimer_results.map((interaction, idx) => (
+                                    <div key={idx} className="result-item">
+                                        <div className="result-item-header">
+                                            <span className="result-item-name">
+                                                {interaction.strand1} ↔ {interaction.strand2}
+                                            </span>
+                                            <div className="result-item-info">
+                                                <span className="result-meta">
+                                                    ΔG: {interaction.dg?.toFixed(2) || 'N/A'} kcal/mol
+                                                </span>
+                                                <span className={`status-badge ${
+                                                    interaction.problematic ? 'status-invalid' : 'status-valid'
+                                                }`}>
+                                                    {interaction.problematic ? 'Problematic' : 'OK'}
+                                                </span>
                                             </div>
                                         </div>
-
-                                        <div className="library-domains">
-                                            {strand.domains.map((domain, index) => (
-                                                <React.Fragment key={domain.id}>
-                                                    <span className="library-domain">
-                                                        {domain.name} ({domain.length}bp)
-                                                    </span>
-                                                    {index < strand.domains.length - 1 && <span>→</span>}
-                                                </React.Fragment>
-                                            ))}
-                                        </div>
-
-                                        {strand.result && strand.result.strand && (
-                                            <div className="library-sequence">
-                                                <strong>Sequence (5′ → 3′):</strong>
-                                                <div className="sequence-box">
-                                                    {strand.result.strand.sequence}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {strand.result && (
-                                            <div className="library-result">
-                                                <div className="library-result-info">
-                                                    <span
-                                                        className={`library-result-status ${strand.result.validation.overall_pass ? 'library-result-pass' : 'library-result-fail'}`}>
-                                                        {strand.result.validation.overall_pass ? 'Valid' : 'Failed'}
-                                                    </span>
-                                                    <span className="library-result-length">
-                                                        {strand.result.strand.total_length}bp
-                                                    </span>
+                                        {interaction.problematic && interaction.reason && (
+                                            <div className="validation-messages">
+                                                <strong>Issue:</strong>
+                                                <div style={{fontSize: '0.875rem', color: '#dc2626', marginTop: '4px'}}>
+                                                    {interaction.reason}
                                                 </div>
                                             </div>
                                         )}
                                     </div>
                                 ))}
                             </div>
-                        </>
+                        </div>
+                    )}
+
+                    {results.generated_strands && (
+                        <div className="results-section">
+                            <h3 className="results-section-title">Generated Strands</h3>
+                            <div className="results-list">
+                                {results.generated_strands.map((strand, idx) => (
+                                    <div key={idx} className="result-item">
+                                        <div className="result-item-header">
+                                            <span className="result-item-name">{strand.name}</span>
+                                            <div className="result-item-info">
+                                                <span className="result-meta">{strand.length}nt</span>
+                                                <span className={`status-badge ${
+                                                    strand.valid ? 'status-valid' : 'status-invalid'
+                                                }`}>
+                                                    {strand.valid ? 'Valid' : 'Invalid'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="result-item-sequence">{strand.sequence}</div>
+                                        {!strand.valid && strand.validation_messages && strand.validation_messages.length > 0 && (
+                                            <div className="validation-messages">
+                                                <strong>Validation Issues:</strong>
+                                                <ul style={{margin: '4px 0', paddingLeft: '20px'}}>
+                                                    {strand.validation_messages.map((message, i) => (
+                                                        <li key={i} style={{fontSize: '0.875rem', color: '#dc2626'}}>
+                                                            {message}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {results.errors && results.errors.length > 0 && (
+                        <div className="results-section">
+                            <h3 className="results-section-title">Errors</h3>
+                            {results.errors.map((error, idx) => (
+                                <div key={idx} className="error">
+                                    {error}
+                                </div>
+                            ))}
+                        </div>
                     )}
                 </div>
             )}
