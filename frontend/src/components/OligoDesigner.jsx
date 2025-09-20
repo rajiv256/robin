@@ -377,7 +377,30 @@ const OligoDesigner = () => {
                         />
                     </div>
                     <div className="form-group">
-                        <label className="form-label">Cross-dimer ΔG</label>
+                        <label className="form-label">Hairpin ΔG (kcal/mol)</label>
+                        <input
+                            type="number"
+                            step="0.1"
+                            className="form-input"
+                            value={settings.hairpin_dg}
+                            onChange={(e) => setSettings(prev => ({...prev, hairpin_dg: parseFloat(e.target.value)}))}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Self-dimer ΔG (kcal/mol)</label>
+                        <input
+                            type="number"
+                            step="0.1"
+                            className="form-input"
+                            value={settings.self_dimer_dg}
+                            onChange={(e) => setSettings(prev => ({
+                                ...prev,
+                                self_dimer_dg: parseFloat(e.target.value)
+                            }))}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Cross-dimer ΔG (kcal/mol)</label>
                         <input
                             type="number"
                             step="0.1"
@@ -455,10 +478,10 @@ const OligoDesigner = () => {
                         </div>
                     </div>
 
-                    {/*<div className="library-header">*/}
-                    {/*    <h2 className="library-title">Domain Instances</h2>*/}
-                    {/*    <span className="library-count">{domains.length} instances</span>*/}
-                    {/*</div>*/}
+                    <div className="library-header">
+                        <h2 className="library-title">Domain Instances</h2>
+                        <span className="library-count">{domains.length} instances</span>
+                    </div>
 
                     {domains.length === 0 ? (
                         <div className="library-empty">
