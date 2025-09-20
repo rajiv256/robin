@@ -179,11 +179,92 @@ def get_all_oligo_lengths() -> List[int]:
 
 
 def get_random_oligo(length: int) -> Optional[str]:
-    """Get random oligo sequence of specific length from Redis"""
+    """Get random oligo sequence of specific length from Redis, with fallback strategies"""
+    # First try exact length
     oligos = get_oligos_by_length(length)
     if oligos:
         return random.choice(oligos)
-    return None
+
+    # Fallback: construct from shorter oligos
+    return construct_oligo_from_shorter(length)
+
+
+def check_can_construct_length(target_length: int, available_lengths: List[int]) -> bool:
+    """Check if we can construct an oligo of target length from available lengths"""
+    if not available_lengths:
+        return False
+
+    # Can always construct if exact length exists
+    if target_length in available_lengths:
+        return True
+
+    # Can construct by truncating longer oligos
+    if any(length > target_length for length in available_lengths):
+        return True
+
+    # Can construct by joining shorter oligos (any shorter length works)
+    if any(length < target_length for length in available_lengths):
+        return True
+
+    return False
+
+
+def construct_oligo_from_shorter(target_length: int) -> Optional[str]:
+    """Construct oligo of target length by joining shorter oligos and truncating"""
+    available_lengths = get_all_oligo_lengths()
+
+    if not available_lengths:
+        return None
+
+    # Find the best length(s) to use
+    # Prefer longer oligos to minimize joins
+    suitable_lengths = [l for l in available_lengths if l < target_length]
+
+    if not suitable_lengths:
+        # If no shorter oligos available, try using longer ones and truncate
+        longer_lengths = [l for l in available_lengths if l > target_length]
+        if longer_lengths:
+            best_length = min(longer_lengths)  # Use shortest available longer oligo
+            oligos = get_oligos_by_length(best_length)
+            if oligos:
+                selected_oligo = random.choice(oligos)
+                return selected_oligo[:target_length]  # Truncate to target length
+        return None
+
+    # Use the longest available shorter oligo as primary building block
+    primary_length = max(suitable_lengths)
+
+    constructed_sequence = ""
+    remaining_length = target_length
+
+    while remaining_length > 0:
+        # Choose the best length for remaining space
+        best_length = None
+        for length in sorted(suitable_lengths, reverse=True):
+            if length <= remaining_length:
+                best_length = length
+                break
+
+        if not best_length:
+            # Fill remaining space with shortest available oligo and truncate
+            best_length = min(suitable_lengths)
+
+        # Get random oligo of chosen length
+        oligos = get_oligos_by_length(best_length)
+        if not oligos:
+            return None
+
+        selected_oligo = random.choice(oligos)
+
+        # Add to sequence (truncate if needed)
+        if remaining_length >= len(selected_oligo):
+            constructed_sequence += selected_oligo
+            remaining_length -= len(selected_oligo)
+        else:
+            constructed_sequence += selected_oligo[:remaining_length]
+            remaining_length = 0
+
+    return constructed_sequence
 
 
 def get_oligo_with_properties(length: int) -> Optional[Dict]:
@@ -225,6 +306,18 @@ def health_check():
         # Get metadata if available
         metadata = r.hgetall('oligo:metadata')
 
+        # Calculate construction range
+        construction_info = {}
+        if available_lengths:
+            min_available = min(available_lengths)
+            max_available = max(available_lengths)
+            construction_info = {
+                'min_constructible': 1,  # Can construct any length >= 1
+                'max_practical': max_available * 3,  # Practical upper limit
+                'exact_lengths': available_lengths,
+                'construction_note': f"Can construct any length by joining/truncating available oligos ({min_available}-{max_available}nt)"
+            }
+
         return jsonify({
             'status': 'healthy',
             'redis': 'connected',
@@ -232,6 +325,7 @@ def health_check():
             'database': {
                 'total_oligos': total_oligos,
                 'available_lengths': available_lengths,
+                'construction_capabilities': construction_info,
                 'metadata': metadata
             }
         }), 200
@@ -294,17 +388,31 @@ def add_domain():
         if name in domain_cache:
             return jsonify({'success': False, 'error': f'Domain "{name}" already exists in cache'}), 400
 
-        # Check if we have oligos of this length in Redis
-        available_oligos = get_oligos_by_length(length)
-        if not available_oligos:
-            return jsonify({'success': False, 'error': f'No oligos of length {length} found in Redis database'}), 400
+        # Check if we have oligos in Redis database
+        available_lengths = get_all_oligo_lengths()
+        if not available_lengths:
+            return jsonify({'success': False, 'error': 'No oligos found in Redis database. Load oligos first.'}), 400
+
+        # Check if we can construct oligo of this length
+        can_construct = check_can_construct_length(length, available_lengths)
+        if not can_construct:
+            return jsonify({
+                'success': False,
+                'error': f'Cannot construct oligo of length {length}nt. Available lengths: {available_lengths}'
+            }), 400
 
         # Add to in-memory cache
         domain_cache[name] = length
 
+        # Determine construction method for user info
+        if length in available_lengths:
+            method = f"exact match available"
+        else:
+            method = f"will construct from available lengths: {available_lengths}"
+
         return jsonify({
             'success': True,
-            'message': f'Added domain "{name}" to cache with length {length}nt ({len(available_oligos)} oligos available)'
+            'message': f'Added domain "{name}" to cache with length {length}nt ({method})'
         })
 
     except Exception as e:
