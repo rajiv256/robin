@@ -1,4 +1,3 @@
-// OligoDesigner.jsx
 import React, {useState, useEffect} from 'react';
 import './OligoDesigner.css';
 
@@ -199,6 +198,40 @@ const OligoDesigner = () => {
         }
     };
 
+    const optimizeStrandSets = async () => {
+        if (selectedStrands.length === 0) {
+            setError('Select at least one strand for optimization');
+            return;
+        }
+
+        setLoading(true);
+        setError('');
+
+        try {
+            const response = await fetch(`${API_BASE}/generate-optimized-strand-sets`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    settings,
+                    strand_ids: selectedStrands,
+                    num_generations: 100
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                setResults(result);
+            } else {
+                setError(result.error || 'Optimization failed');
+            }
+        } catch (err) {
+            setError('Failed to run strand optimization');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const checkCrossDimers = async () => {
         if (selectedStrands.length < 2) {
             setError('Select at least 2 strands to check cross-dimers');
@@ -336,22 +369,14 @@ const OligoDesigner = () => {
                                     {name} ({length}nt)
                                     <button
                                         onClick={() => removeDomainFromCache(name)}
-                                        style={{
-                                            marginLeft: '8px',
-                                            background: 'none',
-                                            border: 'none',
-                                            color: '#dc2626',
-                                            cursor: 'pointer'
-                                        }}
+                                        className="btn btn-danger btn-sm"
                                     >
                                         ×
                                     </button>
                                 </div>
                                 <div className="cached-domain">
                                     {name}* ({length}nt)
-                                    <span style={{marginLeft: '8px', fontSize: '0.75rem', color: '#6b7280'}}>
-                                        complement
-                                    </span>
+                                    <span className="complement-badge">complement</span>
                                 </div>
                             </React.Fragment>
                         ))}
@@ -507,7 +532,7 @@ const OligoDesigner = () => {
                                     placeholder="e.g., a, b, c"
                                 />
                                 {isExistingDomain && (
-                                    <div className="add-form-note" style={{color: '#059669'}}>
+                                    <div className="add-form-note">
                                         Domain exists in cache with length {existingDomainLength}nt
                                     </div>
                                 )}
@@ -533,9 +558,9 @@ const OligoDesigner = () => {
                             </button>
                         </div>
                         <div className="add-form-note">
-                            Domains are added to cache first. Use "Generate Domain Sequences" to create sequences for
-                            all cached domains.
-                            Individual domains are not validated - only complete strand sequences are validated.
+                            Domains are added to cache first. Use "Build Strands" to create sequences for
+                            all cached domains. Individual domains are not validated - only complete strand sequences
+                            are validated.
                         </div>
                     </div>
 
@@ -690,9 +715,6 @@ const OligoDesigner = () => {
                                             }`}>
                                                 {strand.validation_results.overall_valid ? 'Valid' : 'Invalid'}
                                             </span>
-                                            <span className="result-meta">
-                                                Length: {strand.sequence ? strand.sequence.length : 0}nt
-                                            </span>
                                         </div>
                                     )}
                                 </div>
@@ -711,6 +733,13 @@ const OligoDesigner = () => {
                             </button>
                             <button
                                 className="btn btn-primary"
+                                onClick={optimizeStrandSets}
+                                disabled={loading || selectedStrands.length === 0}
+                            >
+                                {loading ? 'Optimizing...' : `Optimize Strand Sets (${selectedStrands.length})`}
+                            </button>
+                            <button
+                                className="btn btn-secondary"
                                 onClick={checkCrossDimers}
                                 disabled={loading || selectedStrands.length < 2}
                             >
@@ -734,7 +763,8 @@ const OligoDesigner = () => {
                     <h2 className="results-title">
                         {results.type === 'cross-dimer' ? '3\' End Cross-Dimer Analysis' :
                             results.type === 'three-prime-analysis' ? 'Comprehensive 3\' End Analysis' :
-                                'Strand Generation Results'}
+                                results.top_strand_sets ? 'Optimized Strand Sets' :
+                                    'Strand Generation Results'}
                     </h2>
 
                     <div className={`results-status ${results.success ? 'success' : 'fail'}`}>
@@ -747,12 +777,131 @@ const OligoDesigner = () => {
                         </div>
                     )}
 
+                    {/* Optimized Strand Sets Results */}
+                    {results.top_strand_sets && (
+                        <div className="results-section">
+                            <h3 className="results-section-title">Top Optimized Strand Sets</h3>
+                            <div className="results-note">
+                                Generated {results.total_generated} sets, found {results.total_valid} valid sets. Ranked
+                                by penalty-based scoring: fewer penalties = higher score.
+                            </div>
+                            <div className="results-list">
+                                {results.top_strand_sets.map((strandSet, idx) => (
+                                    <div key={idx} className="result-item optimization-result">
+                                        <div className="result-item-header">
+                                            <span className="result-item-name">
+                                                Set #{strandSet.generation} (Rank {idx + 1})
+                                            </span>
+                                            <div className="result-item-info">
+                                                <span className="result-meta score-total">
+                                                    Score: {strandSet.score.total}/100
+                                                </span>
+                                                <span className="status-badge status-valid">
+                                                    Optimized
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Penalty Breakdown */}
+                                        <div className="score-breakdown">
+                                            <div className="score-component">
+                                                <span className="score-label">Thermodynamic Violations:</span>
+                                                <span
+                                                    className="score-penalty">-{strandSet.score.penalties.thermodynamic_violations}pts</span>
+                                            </div>
+                                            <div className="score-component">
+                                                <span className="score-label">3' Stability Imbalance:</span>
+                                                <span
+                                                    className="score-penalty">-{strandSet.score.penalties.three_prime_imbalance}pts</span>
+                                            </div>
+                                            <div className="score-component">
+                                                <span className="score-label">Cross-Dimer Risks:</span>
+                                                <span
+                                                    className="score-penalty">-{strandSet.score.penalties.cross_dimer_risks}pts</span>
+                                            </div>
+                                            <div className="score-component total-penalty">
+                                                <span className="score-label">Total Penalties:</span>
+                                                <span
+                                                    className="score-penalty">-{strandSet.score.penalties.total_penalty}pts</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Detailed Penalty Breakdown */}
+                                        {strandSet.score.penalty_details && strandSet.score.penalty_details.length > 0 && (
+                                            <div className="penalty-details">
+                                                <strong>Penalty Details:</strong>
+                                                <ul className="penalty-list">
+                                                    {strandSet.score.penalty_details.map((detail, detailIdx) => (
+                                                        <li key={detailIdx} className="penalty-item">
+                                                            {detail}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+
+                                        {/* Strand Sequences */}
+                                        <div className="optimized-strands">
+                                            <strong>Strand Sequences:</strong>
+                                            {strandSet.strands.map((strand, strandIdx) => (
+                                                <div key={strandIdx} className="optimized-strand">
+                                                    <div className="strand-header">
+                                                        <span className="strand-name">{strand.name}</span>
+                                                        <span
+                                                            className="strand-length">{strand.sequence.length}nt</span>
+                                                    </div>
+                                                    <div className="sequence-box">{strand.sequence}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Action to use this set */}
+                                        <div className="optimization-actions">
+                                            <button
+                                                className="btn btn-primary btn-sm"
+                                                onClick={() => {
+                                                    try {
+                                                        setStrands(currentStrands => {
+                                                            const updatedStrands = [...currentStrands];
+                                                            strandSet.strands.forEach(optimizedStrand => {
+                                                                const strandIndex = updatedStrands.findIndex(s =>
+                                                                    s.name === optimizedStrand.name
+                                                                );
+                                                                if (strandIndex !== -1) {
+                                                                    updatedStrands[strandIndex] = {
+                                                                        ...updatedStrands[strandIndex],
+                                                                        sequence: optimizedStrand.sequence,
+                                                                        validation_results: optimizedStrand.validation
+                                                                    };
+                                                                }
+                                                            });
+                                                            return updatedStrands;
+                                                        });
+                                                        setResults(null);
+                                                    } catch (error) {
+                                                        console.error('Error updating strand set:', error);
+                                                        setError('Failed to apply optimized strand set');
+                                                    }
+                                                }}
+                                            >
+                                                Use This Set
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* 3' Cross-Dimer Results */}
                     {results.cross_dimer_results && (
                         <div className="results-section">
                             <h3 className="results-section-title">3' End Cross-Dimer Interactions</h3>
                             <div className="results-note">
                                 Checking 3' end (last 5nt) of each strand against full sequence of every other strand
+                                {results.skipped_interactions && results.skipped_interactions.length > 0 &&
+                                    ` (skipped ${results.skipped_interactions.length} interactions with complementary domains)`
+                                }
                             </div>
                             <div className="results-list">
                                 {results.cross_dimer_results.map((interaction, idx) => (
@@ -778,7 +927,7 @@ const OligoDesigner = () => {
                                         {interaction.problematic && interaction.reason && (
                                             <div className="validation-messages">
                                                 <strong>Issue:</strong>
-                                                <div style={{fontSize: '0.875rem', color: '#dc2626', marginTop: '4px'}}>
+                                                <div className="validation-message">
                                                     {interaction.reason}
                                                 </div>
                                             </div>
@@ -856,13 +1005,15 @@ const OligoDesigner = () => {
                                                                 → {crossDimer.target_strand}
                                                             </span>
                                                             <span className="cross-dimer-dg">
-                                                                ΔG: {crossDimer.dg} kcal/mol
+                                                                {crossDimer.skipped ? 'Skipped (complementary domains)' : `ΔG: ${crossDimer.dg} kcal/mol`}
                                                             </span>
-                                                            <span className={`status-badge ${
-                                                                crossDimer.problematic ? 'status-invalid' : 'status-valid'
-                                                            }`}>
-                                                                {crossDimer.problematic ? 'Problem' : 'OK'}
-                                                            </span>
+                                                            {!crossDimer.skipped && (
+                                                                <span className={`status-badge ${
+                                                                    crossDimer.problematic ? 'status-invalid' : 'status-valid'
+                                                                }`}>
+                                                                    {crossDimer.problematic ? 'Problem' : 'OK'}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     ))}
                                                 </div>
@@ -896,9 +1047,9 @@ const OligoDesigner = () => {
                                         {!strand.valid && strand.validation_messages && strand.validation_messages.length > 0 && (
                                             <div className="validation-messages">
                                                 <strong>Validation Issues:</strong>
-                                                <ul style={{margin: '4px 0', paddingLeft: '20px'}}>
+                                                <ul className="validation-list">
                                                     {strand.validation_messages.map((message, i) => (
-                                                        <li key={i} style={{fontSize: '0.875rem', color: '#dc2626'}}>
+                                                        <li key={i} className="validation-message">
                                                             {message}
                                                         </li>
                                                     ))}
@@ -921,6 +1072,47 @@ const OligoDesigner = () => {
                             ))}
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Final Strand Summary Table */}
+            {strands.some(strand => strand.sequence) && (
+                <div className="results">
+                    <h2 className="results-title">Final Strand Summary</h2>
+                    <div className="results-section">
+                        <div className="strand-table">
+                            <table className="summary-table">
+                                <thead>
+                                <tr>
+                                    <th>Strand Name</th>
+                                    <th>Sequence</th>
+                                    <th>Length</th>
+                                    <th>Status</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {strands
+                                    .filter(strand => strand.sequence)
+                                    .map(strand => (
+                                        <tr key={strand.id}>
+                                            <td className="strand-name-cell">{strand.name}</td>
+                                            <td className="sequence-cell">
+                                                <div className="sequence-box">{strand.sequence}</div>
+                                            </td>
+                                            <td className="length-cell">{strand.sequence.length}nt</td>
+                                            <td className="status-cell">
+                                                <span className={`status-badge ${
+                                                    strand.validation_results?.overall_valid ? 'status-valid' : 'status-invalid'
+                                                }`}>
+                                                    {strand.validation_results?.overall_valid ? 'Valid' : 'Invalid'}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

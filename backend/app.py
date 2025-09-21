@@ -77,7 +77,7 @@ class OligoDesigner:
 
             # Hairpin check
             try:
-                hairpin_result = primer3.calc_hairpin(sequence, mv_conc=50, dv_conc=1.5,
+                hairpin_result = primer3.calc_hairpin(sequence, mv_conc=50, dv_conc=12.5,
                                                       dntp_conc=0.6, dna_conc=50, temp_c=temp)
                 hairpin_dg = hairpin_result.dg / 1000.0  # Convert cal/mol to kcal/mol
                 results['hairpin_dg']['value'] = round(hairpin_dg, 2)
@@ -92,7 +92,7 @@ class OligoDesigner:
 
             # Self-dimer check
             try:
-                homodimer_result = primer3.calc_homodimer(sequence, mv_conc=50, dv_conc=1.5,
+                homodimer_result = primer3.calc_homodimer(sequence, mv_conc=50, dv_conc=12.5,
                                                           dntp_conc=0.6, dna_conc=50, temp_c=temp)
                 self_dimer_dg = homodimer_result.dg / 1000.0  # Convert cal/mol to kcal/mol
                 results['self_dimer_dg']['value'] = round(self_dimer_dg, 2)
@@ -110,7 +110,7 @@ class OligoDesigner:
 
             # 3' hairpin check
             try:
-                three_prime_hairpin_result = primer3.calc_hairpin(three_prime_end, mv_conc=50, dv_conc=1.5,
+                three_prime_hairpin_result = primer3.calc_hairpin(three_prime_end, mv_conc=50, dv_conc=12.5,
                                                                   dntp_conc=0.6, dna_conc=50, temp_c=temp)
                 three_prime_hairpin_dg = three_prime_hairpin_result.dg / 1000.0
                 results['three_prime_hairpin']['value'] = round(three_prime_hairpin_dg, 2)
@@ -126,7 +126,7 @@ class OligoDesigner:
             # 3' self-dimer check (3' end vs full sequence)
             try:
                 three_prime_self_dimer_result = primer3.calc_heterodimer(three_prime_end, sequence, mv_conc=50,
-                                                                         dv_conc=1.5,
+                                                                         dv_conc=12.5,
                                                                          dntp_conc=0.6, dna_conc=50, temp_c=temp)
                 three_prime_self_dimer_dg = three_prime_self_dimer_result.dg / 1000.0
                 results['three_prime_self_dimer']['value'] = round(three_prime_self_dimer_dg, 2)
@@ -147,7 +147,7 @@ class OligoDesigner:
     def calculate_cross_dimer_dg(self, seq1: str, seq2: str, temp: float = 37) -> float:
         """Calculate cross-dimer ΔG using primer3"""
         try:
-            heterodimer_result = primer3.calc_heterodimer(seq1, seq2, mv_conc=50, dv_conc=1.5,
+            heterodimer_result = primer3.calc_heterodimer(seq1, seq2, mv_conc=50, dv_conc=12.5,
                                                           dntp_conc=0.6, dna_conc=50, temp_c=temp)
             return heterodimer_result.dg / 1000.0
         except Exception:
@@ -157,7 +157,7 @@ class OligoDesigner:
         """Calculate 3' end cross-dimer ΔG: 3' end of seq1 vs full seq2"""
         try:
             three_prime_end = seq1[-5:]  # Last 5 nucleotides of seq1
-            heterodimer_result = primer3.calc_heterodimer(three_prime_end, seq2, mv_conc=50, dv_conc=1.5,
+            heterodimer_result = primer3.calc_heterodimer(three_prime_end, seq2, mv_conc=50, dv_conc=12.5,
                                                           dntp_conc=0.6, dna_conc=50, temp_c=temp)
             return heterodimer_result.dg / 1000.0
         except Exception:
@@ -193,6 +193,40 @@ def get_validation_messages(validation_results: Dict) -> List[str]:
                         messages.append(f"3' self-dimer ΔG {result.get('value', 'N/A')} kcal/mol too low")
 
     return messages
+
+
+def should_skip_cross_dimer_check(strand1_domains: List[str], strand2_domains: List[str]) -> bool:
+    """
+    Check if cross-dimer analysis should be skipped between two strands.
+    Skip if strands contain a domain and its reverse complement (designed to bind).
+
+    Args:
+        strand1_domains: List of domain names for strand 1
+        strand2_domains: List of domain names for strand 2
+
+    Returns:
+        True if cross-dimer check should be skipped, False otherwise
+    """
+    # Extract base domain names from both strands
+    strand1_bases = set()
+    strand2_bases = set()
+
+    for domain in strand1_domains:
+        base_name = domain.rstrip('*')
+        strand1_bases.add(base_name)
+
+    for domain in strand2_domains:
+        base_name = domain.rstrip('*')
+        strand2_bases.add(base_name)
+
+    # Check if any base domain appears in both strands
+    # This indicates they share complementary domains and are designed to interact
+    common_bases = strand1_bases.intersection(strand2_bases)
+
+    if common_bases:
+        return True  # Skip cross-dimer check - strands are designed to interact
+
+    return False  # Perform cross-dimer check
 
 
 # Initialize designer
@@ -637,7 +671,8 @@ def check_cross_dimers():
                 target_strands.append({
                     'id': sid,
                     'name': strands[sid]['name'],
-                    'sequence': strands[sid]['sequence']
+                    'sequence': strands[sid]['sequence'],
+                    'domains': strands[sid]['domains']
                 })
 
         if len(target_strands) < 2:
@@ -648,9 +683,20 @@ def check_cross_dimers():
 
         # Run 3' end cross-dimer analysis - ALL PAIRWISE COMBINATIONS
         results = []
+        skipped_interactions = []
+
         for i, strand1 in enumerate(target_strands):
             for j, strand2 in enumerate(target_strands):
                 if i == j:  # Skip self-interaction
+                    continue
+
+                # Check if we should skip this cross-dimer check
+                if should_skip_cross_dimer_check(strand1['domains'], strand2['domains']):
+                    skipped_interactions.append({
+                        'strand1': strand1['name'],
+                        'strand2': strand2['name'],
+                        'reason': 'Strands contain complementary domains (designed to interact)'
+                    })
                     continue
 
                 # Calculate 3' end cross-dimer ΔG: 3' end of strand1 vs full strand2
@@ -683,11 +729,22 @@ def check_cross_dimers():
         # Count problematic interactions
         problematic_count = sum(1 for r in results if r['problematic'])
 
+        # Prepare message
+        total_pairs = len(target_strands) * (len(target_strands) - 1)  # All directed pairs
+        analyzed_pairs = len(results)
+        skipped_pairs = len(skipped_interactions)
+
+        message = f"Analyzed {analyzed_pairs} 3' end interactions ({len(target_strands)} strands). "
+        message += f"Found {problematic_count} problematic interactions. "
+        if skipped_pairs > 0:
+            message += f"Skipped {skipped_pairs} interactions (complementary domains)."
+
         return jsonify({
             'type': 'cross-dimer',
             'success': True,
             'cross_dimer_results': results,
-            'message': f"Analyzed {len(results)} 3' end interactions ({len(target_strands)} strands, all pairs). Found {problematic_count} problematic interactions."
+            'skipped_interactions': skipped_interactions,
+            'message': message
         })
 
     except Exception as e:
@@ -709,7 +766,8 @@ def check_three_prime_analysis():
                 target_strands.append({
                     'id': sid,
                     'name': strands[sid]['name'],
-                    'sequence': strands[sid]['sequence']
+                    'sequence': strands[sid]['sequence'],
+                    'domains': strands[sid]['domains']
                 })
 
         if not target_strands:
@@ -733,7 +791,7 @@ def check_three_prime_analysis():
 
             # 1. 3' Hairpin formation
             try:
-                hairpin_result = primer3.calc_hairpin(three_prime_end, mv_conc=50, dv_conc=1.5,
+                hairpin_result = primer3.calc_hairpin(three_prime_end, mv_conc=50, dv_conc=12.5,
                                                       dntp_conc=0.6, dna_conc=50, temp_c=temp)
                 hairpin_dg = hairpin_result.dg / 1000.0
                 threshold = settings.get('three_prime_hairpin_dg', -2.0)
@@ -744,6 +802,7 @@ def check_three_prime_analysis():
                     'description': f"3' hairpin formation (last 5nt)"
                 }
             except Exception:
+                threshold = settings.get('three_prime_hairpin_dg', -2.0)
                 strand_result['checks']['hairpin'] = {
                     'dg': 0.0,
                     'threshold': threshold,
@@ -753,7 +812,7 @@ def check_three_prime_analysis():
 
             # 2. 3' Self-dimer formation (3' end vs full sequence)
             try:
-                self_dimer_result = primer3.calc_heterodimer(three_prime_end, sequence, mv_conc=50, dv_conc=1.5,
+                self_dimer_result = primer3.calc_heterodimer(three_prime_end, sequence, mv_conc=50, dv_conc=12.5,
                                                              dntp_conc=0.6, dna_conc=50, temp_c=temp)
                 self_dimer_dg = self_dimer_result.dg / 1000.0
                 threshold = settings.get('three_prime_self_dimer_dg', -5.0)
@@ -776,47 +835,302 @@ def check_three_prime_analysis():
             cross_dimers = []
             for other_strand in target_strands:
                 if other_strand['name'] != strand['name']:
-                    try:
-                        cross_dimer_result = primer3.calc_heterodimer(three_prime_end, other_strand['sequence'],
-                                                                      mv_conc=50, dv_conc=1.5,
-                                                                      dntp_conc=0.6, dna_conc=50, temp_c=temp)
-                        cross_dimer_dg = cross_dimer_result.dg / 1000.0
-                        threshold = settings.get('cross_dimer_dg', -8.0)
-                        cross_dimers.append({
-                            'target_strand': other_strand['name'],
-                            'dg': round(cross_dimer_dg, 2),
-                            'threshold': threshold,
-                            'problematic': cross_dimer_dg < threshold
-                        })
-                    except Exception:
+                    # Check if we should skip this cross-dimer check
+                    if should_skip_cross_dimer_check(strand['domains'], other_strand['domains']):
                         cross_dimers.append({
                             'target_strand': other_strand['name'],
                             'dg': 0.0,
-                            'threshold': threshold,
-                            'problematic': False
+                            'threshold': settings.get('cross_dimer_dg', -8.0),
+                            'problematic': False,
+                            'skipped': True,
+                            'skip_reason': 'Contains complementary domains'
                         })
+                    else:
+                        try:
+                            cross_dimer_result = primer3.calc_heterodimer(three_prime_end, other_strand['sequence'],
+                                                                          mv_conc=50, dv_conc=12.5,
+                                                                          dntp_conc=0.6, dna_conc=50, temp_c=temp)
+                            cross_dimer_dg = cross_dimer_result.dg / 1000.0
+                            threshold = settings.get('cross_dimer_dg', -8.0)
+                            cross_dimers.append({
+                                'target_strand': other_strand['name'],
+                                'dg': round(cross_dimer_dg, 2),
+                                'threshold': threshold,
+                                'problematic': cross_dimer_dg < threshold,
+                                'skipped': False
+                            })
+                        except Exception:
+                            threshold = settings.get('cross_dimer_dg', -8.0)
+                            cross_dimers.append({
+                                'target_strand': other_strand['name'],
+                                'dg': 0.0,
+                                'threshold': threshold,
+                                'problematic': False,
+                                'skipped': False
+                            })
 
             strand_result['checks']['cross_dimers'] = cross_dimers
             results.append(strand_result)
 
         # Count total problematic interactions
         total_problematic = 0
+        total_skipped = 0
         for strand_result in results:
             if strand_result['checks']['hairpin']['problematic']:
                 total_problematic += 1
             if strand_result['checks']['self_dimer']['problematic']:
                 total_problematic += 1
-            total_problematic += sum(1 for cd in strand_result['checks']['cross_dimers'] if cd['problematic'])
+            for cd in strand_result['checks']['cross_dimers']:
+                if cd.get('skipped', False):
+                    total_skipped += 1
+                elif cd['problematic']:
+                    total_problematic += 1
+
+        message = f"Analyzed 3' ends of {len(target_strands)} strands. Found {total_problematic} problematic interactions."
+        if total_skipped > 0:
+            message += f" Skipped {total_skipped} cross-dimer checks (complementary domains)."
 
         return jsonify({
             'type': 'three-prime-analysis',
             'success': True,
             'three_prime_results': results,
-            'message': f"Analyzed 3' ends of {len(target_strands)} strands. Found {total_problematic} problematic interactions."
+            'message': message
         })
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/generate-optimized-strand-sets', methods=['POST'])
+def generate_optimized_strand_sets():
+    """Generate 100 different strand sets, validate all, return top ranked sets"""
+    data = request.json
+    settings = data.get('settings', {})
+    strand_ids = data.get('strand_ids', [])
+    num_generations = data.get('num_generations', 100)
+
+    try:
+        # Get target strands
+        target_strands = [strands[sid] for sid in strand_ids if sid in strands]
+
+        if not target_strands:
+            return jsonify({'success': False, 'error': 'No strands selected'})
+
+        # Collect all unique base domain names needed
+        required_domains = set()
+        for strand in target_strands:
+            for domain_name in strand['domains']:
+                base_name = domain_name.rstrip('*')
+                required_domains.add(base_name)
+
+        valid_strand_sets = []
+
+        for generation in range(num_generations):
+            # Generate random domain assignments for this iteration
+            domain_assignments = {}
+            generation_failed = False
+
+            for base_name in required_domains:
+                if base_name not in domain_cache:
+                    generation_failed = True
+                    break
+
+                length = domain_cache[base_name]
+                base_sequence = get_random_oligo(length)
+
+                if base_sequence:
+                    domain_assignments[base_name] = base_sequence
+                    domain_assignments[base_name + '*'] = designer.reverse_complement(base_sequence)
+                else:
+                    generation_failed = True
+                    break
+
+            if generation_failed:
+                continue
+
+            # Build strand sequences for this generation
+            generation_strands = []
+            all_valid = True
+
+            for strand in target_strands:
+                strand_seq = ""
+                for domain_name in strand['domains']:
+                    if domain_name in domain_assignments:
+                        strand_seq += domain_assignments[domain_name]
+                    else:
+                        all_valid = False
+                        break
+
+                if not all_valid:
+                    break
+
+                # Validate individual strand
+                strand_validation = designer.validate_sequence(strand_seq, settings)
+                if not strand_validation['overall_valid']:
+                    all_valid = False
+                    break
+
+                generation_strands.append({
+                    'name': strand['name'],
+                    'sequence': strand_seq,
+                    'validation': strand_validation,
+                    'domains': strand['domains']
+                })
+
+            if not all_valid:
+                continue
+
+            # Check cross-dimer interactions for this generation (with skipping logic)
+            cross_dimer_valid = True
+            cross_dimer_results = []
+
+            for i, strand1 in enumerate(generation_strands):
+                for j, strand2 in enumerate(generation_strands):
+                    if i == j:
+                        continue
+
+                    # Skip cross-dimer check if strands have complementary domains
+                    if should_skip_cross_dimer_check(strand1['domains'], strand2['domains']):
+                        continue
+
+                    cross_dg = designer.calculate_three_prime_cross_dimer_dg(
+                        strand1['sequence'],
+                        strand2['sequence'],
+                        settings.get('temp', 37)
+                    )
+
+                    cross_dimer_results.append({
+                        'strand1': strand1['name'],
+                        'strand2': strand2['name'],
+                        'dg': cross_dg
+                    })
+
+                    if cross_dg < settings.get('cross_dimer_dg', -8.0):
+                        cross_dimer_valid = False
+
+            if cross_dimer_valid:
+                # Calculate score for this valid set
+                score = calculate_strand_set_score(generation_strands, cross_dimer_results, settings)
+
+                valid_strand_sets.append({
+                    'generation': generation + 1,
+                    'strands': generation_strands,
+                    'cross_dimer_results': cross_dimer_results,
+                    'score': score,
+                    'score_details': score  # Will contain breakdown
+                })
+
+        # Sort by score (highest first) and return top results
+        valid_strand_sets.sort(key=lambda x: x['score']['total'], reverse=True)
+        top_sets = valid_strand_sets[:10]  # Return top 10
+
+        return jsonify({
+            'success': True,
+            'message': f"Generated {num_generations} strand sets. Found {len(valid_strand_sets)} valid sets.",
+            'total_generated': num_generations,
+            'total_valid': len(valid_strand_sets),
+            'top_strand_sets': top_sets
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+def calculate_strand_set_score(strands, cross_dimer_results, settings):
+    """Penalty-based scoring: Start at 100, subtract penalties for violations and suboptimal conditions"""
+
+    score = 100.0
+    penalties = {
+        'thermodynamic_violations': 0,
+        'three_prime_imbalance': 0,
+        'cross_dimer_risks': 0,
+        'details': []
+    }
+
+    # 1. Thermodynamic Violation Penalties
+    for strand in strands:
+        validation = strand['validation']
+        strand_name = strand['name']
+
+        # Hairpin too stable: -5 points per kcal/mol below threshold
+        hairpin_threshold = settings.get('hairpin_dg', -2.0)
+        hairpin_actual = validation.get('hairpin_dg', {}).get('value', 0)
+        if hairpin_actual < hairpin_threshold:
+            penalty = abs(hairpin_actual - hairpin_threshold) * 5
+            penalties['thermodynamic_violations'] += penalty
+            penalties['details'].append(
+                f"{strand_name}: Hairpin too stable ({hairpin_actual} < {hairpin_threshold}) - {penalty:.1f}pts")
+
+        # Self-dimer too stable: -3 points per kcal/mol below threshold
+        self_dimer_threshold = settings.get('self_dimer_dg', -5.0)
+        self_dimer_actual = validation.get('self_dimer_dg', {}).get('value', 0)
+        if self_dimer_actual < self_dimer_threshold:
+            penalty = abs(self_dimer_actual - self_dimer_threshold) * 3
+            penalties['thermodynamic_violations'] += penalty
+            penalties['details'].append(
+                f"{strand_name}: Self-dimer too stable ({self_dimer_actual} < {self_dimer_threshold}) - {penalty:.1f}pts")
+
+        # 3' hairpin too stable: -6 points per kcal/mol below threshold
+        three_prime_hairpin_threshold = settings.get('three_prime_hairpin_dg', -2.0)
+        three_prime_hairpin_actual = validation.get('three_prime_hairpin', {}).get('value', 0)
+        if three_prime_hairpin_actual < three_prime_hairpin_threshold:
+            penalty = abs(three_prime_hairpin_actual - three_prime_hairpin_threshold) * 6
+            penalties['thermodynamic_violations'] += penalty
+            penalties['details'].append(
+                f"{strand_name}: 3' hairpin too stable ({three_prime_hairpin_actual} < {three_prime_hairpin_threshold}) - {penalty:.1f}pts")
+
+    # 2. 3' End Stability Imbalance Penalties
+    ideal_range = (-6.0, -3.0)  # Ideal range for 3' self-dimer ΔG
+    for strand in strands:
+        strand_name = strand['name']
+        three_prime_dg = strand['validation'].get('three_prime_self_dimer', {}).get('value', 0)
+
+        if three_prime_dg > ideal_range[1]:  # Too weak (>-3.0)
+            penalty = (three_prime_dg - ideal_range[1]) * 4
+            penalties['three_prime_imbalance'] += penalty
+            penalties['details'].append(
+                f"{strand_name}: 3' end too weak ({three_prime_dg} > {ideal_range[1]}) - {penalty:.1f}pts")
+        elif three_prime_dg < ideal_range[0]:  # Too strong (<-6.0)
+            penalty = abs(three_prime_dg - ideal_range[0]) * 6
+            penalties['three_prime_imbalance'] += penalty
+            penalties['details'].append(
+                f"{strand_name}: 3' end too strong ({three_prime_dg} < {ideal_range[0]}) - {penalty:.1f}pts")
+
+    # 3. Cross-Dimer Risk Penalties
+    cross_dimer_threshold = settings.get('cross_dimer_dg', -8.0)
+    danger_zone = cross_dimer_threshold + 2.0  # -6.0 if threshold is -8.0
+
+    for result in cross_dimer_results:
+        interaction = f"{result['strand1']} → {result['strand2']}"
+
+        if result['dg'] < cross_dimer_threshold:
+            # CRITICAL: Below threshold - severe penalty
+            penalty = abs(result['dg'] - cross_dimer_threshold) * 15
+            penalties['cross_dimer_risks'] += penalty
+            penalties['details'].append(
+                f"{interaction}: Cross-dimer violation ({result['dg']:.2f} < {cross_dimer_threshold}) - {penalty:.1f}pts")
+        elif result['dg'] < danger_zone:
+            # WARNING: Close to threshold - moderate penalty
+            penalty = abs(result['dg'] - danger_zone) * 3
+            penalties['cross_dimer_risks'] += penalty
+            penalties['details'].append(
+                f"{interaction}: Cross-dimer risk ({result['dg']:.2f} near threshold) - {penalty:.1f}pts")
+
+    # Calculate final score and totals
+    total_penalty = penalties['thermodynamic_violations'] + penalties['three_prime_imbalance'] + penalties[
+        'cross_dimer_risks']
+    final_score = max(0, score - total_penalty)
+
+    return {
+        'total': round(final_score, 2),
+        'penalties': {
+            'thermodynamic_violations': round(penalties['thermodynamic_violations'], 2),
+            'three_prime_imbalance': round(penalties['three_prime_imbalance'], 2),
+            'cross_dimer_risks': round(penalties['cross_dimer_risks'], 2),
+            'total_penalty': round(total_penalty, 2)
+        },
+        'penalty_details': penalties['details']
+    }
 
 
 if __name__ == '__main__':
