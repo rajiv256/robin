@@ -199,6 +199,40 @@ const OligoDesigner = () => {
         }
     };
 
+    const optimizeStrandSets = async () => {
+        if (selectedStrands.length === 0) {
+            setError('Select at least one strand for optimization');
+            return;
+        }
+
+        setLoading(true);
+        setError('');
+
+        try {
+            const response = await fetch(`${API_BASE}/generate-optimized-strand-sets`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    settings,
+                    strand_ids: selectedStrands,
+                    num_generations: 100
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                setResults(result);
+            } else {
+                setError(result.error || 'Optimization failed');
+            }
+        } catch (err) {
+            setError('Failed to run strand optimization');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const checkCrossDimers = async () => {
         if (selectedStrands.length < 2) {
             setError('Select at least 2 strands to check cross-dimers');
@@ -711,6 +745,13 @@ const OligoDesigner = () => {
                             </button>
                             <button
                                 className="btn btn-primary"
+                                onClick={optimizeStrandSets}
+                                disabled={loading || selectedStrands.length === 0}
+                            >
+                                {loading ? 'Optimizing...' : `Optimize Strand Sets (${selectedStrands.length})`}
+                            </button>
+                            <button
+                                className="btn btn-secondary"
                                 onClick={checkCrossDimers}
                                 disabled={loading || selectedStrands.length < 2}
                             >
@@ -734,7 +775,8 @@ const OligoDesigner = () => {
                     <h2 className="results-title">
                         {results.type === 'cross-dimer' ? '3\' End Cross-Dimer Analysis' :
                             results.type === 'three-prime-analysis' ? 'Comprehensive 3\' End Analysis' :
-                                'Strand Generation Results'}
+                                results.top_strand_sets ? 'Optimized Strand Sets' :
+                                    'Strand Generation Results'}
                     </h2>
 
                     <div className={`results-status ${results.success ? 'success' : 'fail'}`}>
@@ -744,6 +786,134 @@ const OligoDesigner = () => {
                     {results.message && (
                         <div className="results-message">
                             <strong>Status:</strong> {results.message}
+                        </div>
+                    )}
+
+                    {/* Optimized Strand Sets Results */}
+                    {results.top_strand_sets && (
+                        <div className="results-section">
+                            <h3 className="results-section-title">Top Optimized Strand Sets</h3>
+                            <div className="results-note">
+                                Generated {results.total_generated} sets, found {results.total_valid} valid sets. Ranked
+                                by penalty-based scoring: fewer penalties = higher score.
+                            </div>
+                            <div className="results-list">
+                                {results.top_strand_sets.map((strandSet, idx) => (
+                                    <div key={idx} className="result-item optimization-result">
+                                        <div className="result-item-header">
+                                            <span className="result-item-name">
+                                                Set #{strandSet.generation} (Rank {idx + 1})
+                                            </span>
+                                            <div className="result-item-info">
+                                                <span className="result-meta score-total">
+                                                    Score: {strandSet.score.total}/100
+                                                </span>
+                                                <span className="status-badge status-valid">
+                                                    Optimized
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Penalty Breakdown */}
+                                        <div className="score-breakdown">
+                                            <div className="score-component">
+                                                <span className="score-label">Thermodynamic Violations:</span>
+                                                <span
+                                                    className="score-penalty">-{strandSet.score.penalties.thermodynamic_violations}pts</span>
+                                            </div>
+                                            <div className="score-component">
+                                                <span className="score-label">3' Stability Imbalance:</span>
+                                                <span
+                                                    className="score-penalty">-{strandSet.score.penalties.three_prime_imbalance}pts</span>
+                                            </div>
+                                            <div className="score-component">
+                                                <span className="score-label">Cross-Dimer Risks:</span>
+                                                <span
+                                                    className="score-penalty">-{strandSet.score.penalties.cross_dimer_risks}pts</span>
+                                            </div>
+                                            <div className="score-component total-penalty">
+                                                <span className="score-label">Total Penalties:</span>
+                                                <span
+                                                    className="score-penalty">-{strandSet.score.penalties.total_penalty}pts</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Detailed Penalty Breakdown */}
+                                        {strandSet.score.penalty_details && strandSet.score.penalty_details.length > 0 && (
+                                            <div className="penalty-details">
+                                                <strong>Penalty Details:</strong>
+                                                <ul style={{
+                                                    margin: '4px 0',
+                                                    paddingLeft: '20px',
+                                                    fontSize: '0.875rem'
+                                                }}>
+                                                    {strandSet.score.penalty_details.map((detail, detailIdx) => (
+                                                        <li key={detailIdx}
+                                                            style={{color: '#dc2626', marginBottom: '2px'}}>
+                                                            {detail}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+
+                                        {/* Strand Sequences */}
+                                        <div className="optimized-strands">
+                                            <strong>Strand Sequences:</strong>
+                                            {strandSet.strands.map((strand, strandIdx) => (
+                                                <div key={strandIdx} className="optimized-strand">
+                                                    <div className="strand-header">
+                                                        <span className="strand-name">{strand.name}</span>
+                                                        <span
+                                                            className="strand-length">{strand.sequence.length}nt</span>
+                                                    </div>
+                                                    <div className="sequence-box">{strand.sequence}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Action to use this set */}
+                                        <div className="optimization-actions">
+                                            <button
+                                                className="btn btn-primary btn-sm"
+                                                onClick={async () => {
+                                                    try {
+                                                        // Update strands state directly
+                                                        setStrands(currentStrands => {
+                                                            const updatedStrands = [...currentStrands];
+
+                                                            strandSet.strands.forEach(optimizedStrand => {
+                                                                const strandIndex = updatedStrands.findIndex(s =>
+                                                                    s.name === optimizedStrand.name
+                                                                );
+
+                                                                if (strandIndex !== -1) {
+                                                                    updatedStrands[strandIndex] = {
+                                                                        ...updatedStrands[strandIndex],
+                                                                        sequence: optimizedStrand.sequence,
+                                                                        validation_results: optimizedStrand.validation
+                                                                    };
+                                                                }
+                                                            });
+
+                                                            return updatedStrands;
+                                                        });
+
+                                                        // Clear results
+                                                        setResults(null);
+
+                                                    } catch (error) {
+                                                        console.error('Error updating strand set:', error);
+                                                        setError('Failed to apply optimized strand set');
+                                                    }
+                                                }}
+                                            >
+                                                Use This Set
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     )}
 
