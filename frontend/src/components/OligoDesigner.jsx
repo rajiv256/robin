@@ -27,7 +27,9 @@ const OligoDesigner = () => {
         tm_max: 80,
         hairpin_dg: -2.0,
         self_dimer_dg: -5.0,
-        cross_dimer_dg: -8.0
+        cross_dimer_dg: -8.0,
+        three_prime_hairpin_dg: -2.0,
+        three_prime_self_dimer_dg: -5.0
     });
 
     const API_BASE = 'http://localhost:5000/api';
@@ -230,6 +232,39 @@ const OligoDesigner = () => {
         }
     };
 
+    const checkThreePrimeAnalysis = async () => {
+        if (selectedStrands.length === 0) {
+            setError('Select at least one strand for 3\' analysis');
+            return;
+        }
+
+        setLoading(true);
+        setError('');
+
+        try {
+            const response = await fetch(`${API_BASE}/check-three-prime-analysis`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    settings,
+                    strand_ids: selectedStrands
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                setResults(result);
+            } else {
+                setError(result.error || '3\' analysis failed');
+            }
+        } catch (err) {
+            setError('Failed to run 3\' analysis');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const deleteItem = async (type, id) => {
         try {
             const response = await fetch(`${API_BASE}/${type}/${id}`, {
@@ -409,6 +444,32 @@ const OligoDesigner = () => {
                             onChange={(e) => setSettings(prev => ({
                                 ...prev,
                                 cross_dimer_dg: parseFloat(e.target.value)
+                            }))}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">3' Hairpin ΔG (kcal/mol)</label>
+                        <input
+                            type="number"
+                            step="0.1"
+                            className="form-input"
+                            value={settings.three_prime_hairpin_dg}
+                            onChange={(e) => setSettings(prev => ({
+                                ...prev,
+                                three_prime_hairpin_dg: parseFloat(e.target.value)
+                            }))}
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">3' Self-dimer ΔG (kcal/mol)</label>
+                        <input
+                            type="number"
+                            step="0.1"
+                            className="form-input"
+                            value={settings.three_prime_self_dimer_dg}
+                            onChange={(e) => setSettings(prev => ({
+                                ...prev,
+                                three_prime_self_dimer_dg: parseFloat(e.target.value)
                             }))}
                         />
                     </div>
@@ -653,7 +714,14 @@ const OligoDesigner = () => {
                                 onClick={checkCrossDimers}
                                 disabled={loading || selectedStrands.length < 2}
                             >
-                                {loading ? 'Checking...' : 'Check Cross-Dimers'}
+                                {loading ? 'Checking...' : 'Check 3\' Cross-Dimers'}
+                            </button>
+                            <button
+                                className="btn btn-warning"
+                                onClick={checkThreePrimeAnalysis}
+                                disabled={loading || selectedStrands.length === 0}
+                            >
+                                {loading ? 'Analyzing...' : 'Full 3\' Analysis'}
                             </button>
                         </div>
                     )}
@@ -664,7 +732,9 @@ const OligoDesigner = () => {
             {results && (
                 <div className="results">
                     <h2 className="results-title">
-                        {results.type === 'cross-dimer' ? 'Cross-Dimer Analysis' : 'Strand Generation Results'}
+                        {results.type === 'cross-dimer' ? '3\' End Cross-Dimer Analysis' :
+                            results.type === 'three-prime-analysis' ? 'Comprehensive 3\' End Analysis' :
+                                'Strand Generation Results'}
                     </h2>
 
                     <div className={`results-status ${results.success ? 'success' : 'fail'}`}>
@@ -677,17 +747,24 @@ const OligoDesigner = () => {
                         </div>
                     )}
 
+                    {/* 3' Cross-Dimer Results */}
                     {results.cross_dimer_results && (
                         <div className="results-section">
-                            <h3 className="results-section-title">Cross-Dimer Interactions</h3>
+                            <h3 className="results-section-title">3' End Cross-Dimer Interactions</h3>
+                            <div className="results-note">
+                                Checking 3' end (last 5nt) of each strand against full sequence of every other strand
+                            </div>
                             <div className="results-list">
                                 {results.cross_dimer_results.map((interaction, idx) => (
                                     <div key={idx} className="result-item">
                                         <div className="result-item-header">
                                             <span className="result-item-name">
-                                                {interaction.strand1} ↔ {interaction.strand2}
+                                                {interaction.interaction_type}
                                             </span>
                                             <div className="result-item-info">
+                                                <span className="result-meta">
+                                                    3' seq: <code>{interaction.three_prime_sequence}</code>
+                                                </span>
                                                 <span className="result-meta">
                                                     ΔG: {interaction.dg?.toFixed(2) || 'N/A'} kcal/mol
                                                 </span>
@@ -712,6 +789,92 @@ const OligoDesigner = () => {
                         </div>
                     )}
 
+                    {/* Comprehensive 3' Analysis Results */}
+                    {results.three_prime_results && (
+                        <div className="results-section">
+                            <h3 className="results-section-title">Comprehensive 3' End Analysis</h3>
+                            <div className="results-note">
+                                Analyzing 3' hairpin formation, 3' self-dimer binding, and 3' cross-dimer interactions
+                            </div>
+                            <div className="results-list">
+                                {results.three_prime_results.map((strandResult, idx) => (
+                                    <div key={idx} className="result-item">
+                                        <div className="result-item-header">
+                                            <span className="result-item-name">
+                                                {strandResult.strand_name}
+                                            </span>
+                                            <div className="result-item-info">
+                                                <span className="result-meta">
+                                                    3' end: <code>{strandResult.three_prime_sequence}</code>
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* 3' Hairpin Check */}
+                                        <div className="three-prime-check">
+                                            <div className="check-header">
+                                                <span className="check-name">3' Hairpin Formation</span>
+                                                <span className={`status-badge ${
+                                                    strandResult.checks.hairpin.problematic ? 'status-invalid' : 'status-valid'
+                                                }`}>
+                                                    {strandResult.checks.hairpin.problematic ? 'Problematic' : 'OK'}
+                                                </span>
+                                            </div>
+                                            <div className="check-details">
+                                                ΔG: {strandResult.checks.hairpin.dg} kcal/mol
+                                                (threshold: {strandResult.checks.hairpin.threshold} kcal/mol)
+                                            </div>
+                                        </div>
+
+                                        {/* 3' Self-Dimer Check */}
+                                        <div className="three-prime-check">
+                                            <div className="check-header">
+                                                <span
+                                                    className="check-name">3' Self-Dimer (3' end → full sequence)</span>
+                                                <span className={`status-badge ${
+                                                    strandResult.checks.self_dimer.problematic ? 'status-invalid' : 'status-valid'
+                                                }`}>
+                                                    {strandResult.checks.self_dimer.problematic ? 'Problematic' : 'OK'}
+                                                </span>
+                                            </div>
+                                            <div className="check-details">
+                                                ΔG: {strandResult.checks.self_dimer.dg} kcal/mol
+                                                (threshold: {strandResult.checks.self_dimer.threshold} kcal/mol)
+                                            </div>
+                                        </div>
+
+                                        {/* 3' Cross-Dimer Checks */}
+                                        {strandResult.checks.cross_dimers.length > 0 && (
+                                            <div className="three-prime-check">
+                                                <div className="check-header">
+                                                    <span className="check-name">3' Cross-Dimers</span>
+                                                </div>
+                                                <div className="cross-dimer-list">
+                                                    {strandResult.checks.cross_dimers.map((crossDimer, cdIdx) => (
+                                                        <div key={cdIdx} className="cross-dimer-item">
+                                                            <span className="cross-dimer-target">
+                                                                → {crossDimer.target_strand}
+                                                            </span>
+                                                            <span className="cross-dimer-dg">
+                                                                ΔG: {crossDimer.dg} kcal/mol
+                                                            </span>
+                                                            <span className={`status-badge ${
+                                                                crossDimer.problematic ? 'status-invalid' : 'status-valid'
+                                                            }`}>
+                                                                {crossDimer.problematic ? 'Problem' : 'OK'}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Strand Generation Results */}
                     {results.generated_strands && (
                         <div className="results-section">
                             <h3 className="results-section-title">Generated Strands</h3>
