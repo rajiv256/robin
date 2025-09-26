@@ -1,0 +1,351 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="97d8464e-2659-48dd-849f-47c7440d4609" name="Changes" comment="Finally! Optimize strand sets and use those sets!">
+      <change beforePath="$PROJECT_DIR$/backend/app.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/OligoDesigner.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/OligoDesigner.jsx" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="CSS File" />
+        <option value="JavaScript File" />
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="main" />
+      </map>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="ProjectErrors" />
+  </component>
+  <component name="ProjectId" id="32qfFlVUKQVMJrlDlDdgXsN9y8u" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;modify-checks&quot;,
+    &quot;list.type.of.created.stylesheet&quot;: &quot;CSS&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RunManager">
+    <configuration name="objects" type="PythonConfigurationType" factoryName="Python">
+      <module name="robin" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="$PROJECT_DIR$/venv/bin/python" />
+      <option name="SDK_NAME" value="Python 3.10 (robin)" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
+      <EXTENSION ID="software.aws.toolkits.jetbrains.core.execution.PythonAwsConnectionExtension">
+        <option name="credential" />
+        <option name="region" />
+        <option name="useCurrentConnection" value="false" />
+      </EXTENSION>
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/objects.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="97d8464e-2659-48dd-849f-47c7440d4609" name="Changes" comment="" />
+      <created>1758152921458</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1758152921458</updated>
+      <workItem from="1758152922765" duration="74593000" />
+      <workItem from="1758758818809" duration="12235000" />
+    </task>
+    <task id="LOCAL-00001" summary="First commit.">
+      <option name="closed" value="true" />
+      <created>1758225192201</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1758225192201</updated>
+    </task>
+    <task id="LOCAL-00002" summary="First commit.">
+      <option name="closed" value="true" />
+      <created>1758225203876</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1758225203876</updated>
+    </task>
+    <task id="LOCAL-00003" summary="Basic skeleton.">
+      <option name="closed" value="true" />
+      <created>1758226013855</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1758226013855</updated>
+    </task>
+    <task id="LOCAL-00004" summary="Basic skeleton.">
+      <option name="closed" value="true" />
+      <created>1758233231812</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1758233231812</updated>
+    </task>
+    <task id="LOCAL-00005" summary="Merge remote-tracking branch 'origin/main'&#10;&#10;# Conflicts:&#10;#&#9;.gitignore&#10;#&#9;README.md">
+      <option name="closed" value="true" />
+      <created>1758233282247</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1758233282247</updated>
+    </task>
+    <task id="LOCAL-00006" summary="Updated as a React app.">
+      <option name="closed" value="true" />
+      <created>1758246463911</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1758246463911</updated>
+    </task>
+    <task id="LOCAL-00007" summary="Updated as a React app.">
+      <option name="closed" value="true" />
+      <created>1758255366593</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1758255366593</updated>
+    </task>
+    <task id="LOCAL-00008" summary="revamping a bit.">
+      <option name="closed" value="true" />
+      <created>1758255943515</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1758255943515</updated>
+    </task>
+    <task id="LOCAL-00009" summary="revamping a bit.">
+      <option name="closed" value="true" />
+      <created>1758300048143</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1758300048143</updated>
+    </task>
+    <task id="LOCAL-00010" summary="revamping a bit.">
+      <option name="closed" value="true" />
+      <created>1758310194583</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1758310194583</updated>
+    </task>
+    <task id="LOCAL-00011" summary="Added a redis database and use the Dashboard to visualize. Now need to integrate this with the backend.">
+      <option name="closed" value="true" />
+      <created>1758310709881</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1758310709881</updated>
+    </task>
+    <task id="LOCAL-00012" summary="Added a redis database and use the Dashboard to visualize. Now need to integrate this with the backend.">
+      <option name="closed" value="true" />
+      <created>1758310765312</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1758310765312</updated>
+    </task>
+    <task id="LOCAL-00013" summary="A working prototype!">
+      <option name="closed" value="true" />
+      <created>1758314941655</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1758314941655</updated>
+    </task>
+    <task id="LOCAL-00014" summary="A working prototype!">
+      <option name="closed" value="true" />
+      <created>1758315077021</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1758315077021</updated>
+    </task>
+    <task id="LOCAL-00015" summary="Enabled Cache of complementary strands!">
+      <option name="closed" value="true" />
+      <created>1758318326052</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1758318326053</updated>
+    </task>
+    <task id="LOCAL-00016" summary="Enabled Cache of complementary strands!">
+      <option name="closed" value="true" />
+      <created>1758319316312</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1758319316312</updated>
+    </task>
+    <task id="LOCAL-00017" summary="Finally, a complete version!">
+      <option name="closed" value="true" />
+      <created>1758339871975</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1758339871975</updated>
+    </task>
+    <task id="LOCAL-00018" summary="Finally, a complete version! Also handles any length!">
+      <option name="closed" value="true" />
+      <created>1758341971364</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1758341971364</updated>
+    </task>
+    <task id="LOCAL-00019" summary="Finally, a complete version! Also handles any length!">
+      <option name="closed" value="true" />
+      <created>1758343301460</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1758343301460</updated>
+    </task>
+    <task id="LOCAL-00020" summary="Update README.md">
+      <option name="closed" value="true" />
+      <created>1758343381929</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1758343381929</updated>
+    </task>
+    <task id="LOCAL-00021" summary="Update README.md">
+      <option name="closed" value="true" />
+      <created>1758400338588</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1758400338588</updated>
+    </task>
+    <task id="LOCAL-00022" summary="Update README.md">
+      <option name="closed" value="true" />
+      <created>1758400357813</created>
+      <option name="number" value="00022" />
+      <option name="presentableId" value="LOCAL-00022" />
+      <option name="project" value="LOCAL" />
+      <updated>1758400357813</updated>
+    </task>
+    <task id="LOCAL-00023" summary="Update README.md">
+      <option name="closed" value="true" />
+      <created>1758400378618</created>
+      <option name="number" value="00023" />
+      <option name="presentableId" value="LOCAL-00023" />
+      <option name="project" value="LOCAL" />
+      <updated>1758400378618</updated>
+    </task>
+    <task id="LOCAL-00024" summary="Update css">
+      <option name="closed" value="true" />
+      <created>1758411145130</created>
+      <option name="number" value="00024" />
+      <option name="presentableId" value="LOCAL-00024" />
+      <option name="project" value="LOCAL" />
+      <updated>1758411145130</updated>
+    </task>
+    <task id="LOCAL-00025" summary="Added checks for the 3' end.">
+      <option name="closed" value="true" />
+      <created>1758413034622</created>
+      <option name="number" value="00025" />
+      <option name="presentableId" value="LOCAL-00025" />
+      <option name="project" value="LOCAL" />
+      <updated>1758413034622</updated>
+    </task>
+    <task id="LOCAL-00026" summary="Finally! Optimize strand sets and use those sets!">
+      <option name="closed" value="true" />
+      <created>1758418651859</created>
+      <option name="number" value="00026" />
+      <option name="presentableId" value="LOCAL-00026" />
+      <option name="project" value="LOCAL" />
+      <updated>1758418651859</updated>
+    </task>
+    <option name="localTasksCounter" value="27" />
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="First commit." />
+    <MESSAGE value="Basic skeleton." />
+    <MESSAGE value="Merge remote-tracking branch 'origin/main'&#10;&#10;# Conflicts:&#10;#&#9;.gitignore&#10;#&#9;README.md" />
+    <MESSAGE value="Updated as a React app." />
+    <MESSAGE value="revamping a bit." />
+    <MESSAGE value="Added a redis database and use the Dashboard to visualize. Now need to integrate this with the backend." />
+    <MESSAGE value="A working prototype!" />
+    <MESSAGE value="Enabled Cache of complementary strands!" />
+    <MESSAGE value="Finally, a complete version!" />
+    <MESSAGE value="Finally, a complete version! Also handles any length!" />
+    <MESSAGE value="Update README.md" />
+    <MESSAGE value="Update css" />
+    <MESSAGE value="Added checks for the 3' end." />
+    <MESSAGE value="Finally! Optimize strand sets and use those sets!" />
+    <option name="LAST_COMMIT_MESSAGE" value="Finally! Optimize strand sets and use those sets!" />
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/robin$test.coverage" NAME="test Coverage Results" MODIFIED="1758219635092" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/robin$redis_client.coverage" NAME="redis_client Coverage Results" MODIFIED="1758225163828" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/src" />
+    <SUITE FILE_PATH="coverage/robin$dna_utils.coverage" NAME="dna_utils Coverage Results" MODIFIED="1758225022044" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/utils" />
+    <SUITE FILE_PATH="coverage/robin$objects.coverage" NAME="objects Coverage Results" MODIFIED="1758212938114" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/robin$redis.coverage" NAME="redis Coverage Results" MODIFIED="1758221419226" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/src" />
+    <SUITE FILE_PATH="coverage/robin$oligo_redis_loader.coverage" NAME="oligo_redis_loader Coverage Results" MODIFIED="1758309213767" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/src" />
+  </component>
+</project>
